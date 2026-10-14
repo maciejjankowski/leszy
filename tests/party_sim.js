@@ -16,7 +16,7 @@ let seed = 5; const rnd = () => ((seed = (seed * 1664525 + 1013904223) >>> 0) / 
   if (process.env.MOVE) { const [i, dx, dy] = process.env.MOVE.split(','); seats[+i].x += +dx; seats[+i].y += +dy; } // a walker
   const ids = seats.map((_, i) => 'sim' + i);
   for (let i = 0; i < seats.length; i++) await post('join', { id: ids[i], name: seats[i].name, role: seats[i].role });
-  const rc = await post('admin', { cmd: 'rollcall' });
+  const rc = await post('admin', process.env.WALKER ? { cmd: 'rollcall', walker: process.env.WALKER, slot: 0.25 } : { cmd: 'rollcall' });
   const order = rc.party.order, round = rc.party.round;
   // each phone's arrival times on its own clock: clock offset + playback latency + flight time + jitter
   const clock = ids.map(() => rnd() * 40), lat = ids.map(() => 0.02 + rnd() * 0.12);
@@ -25,7 +25,7 @@ let seed = 5; const rnd = () => ((seed = (seed * 1664525 + 1013904223) >>> 0) / 
     const spk = i => (i === 2 || i === 5 ? 6 : 0), mic = i => (i === 5 ? 3 : 0);
     order.forEach((src, k) => {
       const j = ids.indexOf(src), d = Math.hypot(seats[i].x - seats[j].x, seats[i].y - seats[j].y) + 0.05 + (i === j ? 0.05 : 0); // 5 cm speaker-mic gap per phone
-      heard[src] = clock[i] + k * 0.5 + lat[j] + d / R.C + (rnd() - 0.5) * 0.0002; // +-0.1 ms detection jitter
+      heard[src] = clock[i] + k * (rc.party.slot || 0.5) + lat[j] + d / R.C + (rnd() - 0.5) * 0.0002; // +-0.1 ms detection jitter
       lvl[src] = +(-20 - 20 * Math.log10(Math.max(d, 0.1)) + spk(j) + mic(i) + (i === j ? 10 : 0)).toFixed(1);
     });
     await post('heard', { id: ids[i], round, heard, lvl });

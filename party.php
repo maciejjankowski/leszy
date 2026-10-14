@@ -86,8 +86,10 @@ if ($a === 'admin') { // stage screen controls
   $b = body(); $p = party($db); $cmd = $b['cmd'] ?? '';
   $live = $db->prepare('SELECT id, name FROM members WHERE seen > ? ORDER BY joined'); $live->execute([$now - 10]);
   $names = $live->fetchAll(PDO::FETCH_KEY_PAIR); $ids = array_keys($names); // names travel with the round, so phones can say whom they heard
-  if ($cmd === 'rollcall') { // everyone beeps once, 0.5 s apart, starting 4 s from now
-    $p = ['phase' => 'rollcall', 'round' => ($p['round'] ?? 0) + 1, 't0' => ($now + 4) * 1000, 'slot' => max(0.3, min(3, (float)($b['slot'] ?? 0.5))), 'order' => $ids, 'names' => $names, 'band' => ['mid' => [2000, 6000], 'quiet' => [14000, 18000]][$b['band'] ?? ''] ?? [8000, 12000], 'drones' => []];
+  if ($cmd === 'rollcall') { // everyone beeps once, 0.5 s apart, starting 4 s from now. With a walker: walker first, then the others answer fast
+    $walker = cleanId($b['walker'] ?? ''); if ($walker !== '' && in_array($walker, $ids, true)) { $ids = array_merge([$walker], array_values(array_diff($ids, [$walker]))); }
+    $slot = $walker !== '' ? max(0.2, min(1, (float)($b['slot'] ?? 0.25))) : max(0.3, min(3, (float)($b['slot'] ?? 0.5)));
+    $p = ['phase' => 'rollcall', 'round' => ($p['round'] ?? 0) + 1, 't0' => ($now + ($walker !== '' ? 1.5 : 4)) * 1000, 'slot' => $slot, 'walker' => $walker, 'order' => $ids, 'names' => $names, 'band' => ['mid' => [2000, 6000], 'quiet' => [14000, 18000]][$b['band'] ?? ''] ?? [8000, 12000], 'drones' => []];
   } elseif ($cmd === 'drones') { // k random audience phones become drones, each with its own rotor pitch
     $pool = $db->prepare("SELECT id FROM members WHERE seen > ? AND role = 'audience'"); $pool->execute([$now - 10]);
     $cand = $pool->fetchAll(PDO::FETCH_COLUMN); shuffle($cand);

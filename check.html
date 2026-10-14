@@ -46,7 +46,7 @@
     <p class="label">Kalibracja</p>
     <p class="muted" style="font-size:.75em">Połóż 2 lub więcej telefonów na jednym stosie i stuknij je po kolei na mapie: stos kalibruje odległość i głośność. Albo wpisz taśmą 1-2 odległości poniżej.</p>
     <p class="muted" id="zeroList" style="font-size:.75em"></p>
-    <p class="muted" style="font-size:.75em">Albo: przytrzymaj telefon na mapie, żeby oznaczyć go jako <b>idący</b>; w trybie Ciągle rysuje ślad i odległość od startu. Przesuń go o znaną odległość i porównaj.</p>
+    <p class="muted" style="font-size:.75em">Albo: przytrzymaj telefon na mapie, żeby oznaczyć go jako <b>idący</b>. W trybie Ciągle idący piszczy pierwszy, reszta szybko odpowiada (runda ~3 s), mapa reszty stoi, a idący rysuje ślad i odległość od startu. Przesuń go o znaną odległość i porównaj.</p>
     <p class="muted" id="walkInfo" style="font-size:.75em"></p>
     <p class="muted" id="cal" style="font-size:.75em"></p>
     <p class="label">Profil głośności</p>
@@ -74,7 +74,7 @@ const joinUrl = location.href.replace(/check\.html.*$/, 'party.html') + '?room='
   const w = Math.min(260, innerWidth - 80);
   try { new QRCode($('#qr'), { text: u, width: w, height: w }); } catch (e) {}
 })();
-$('#go').onclick = () => hub('admin', { cmd: 'rollcall', band: $('#band').value, slot: +$('#slot').value }).then(j => {
+$('#go').onclick = () => hub('admin', { cmd: 'rollcall', band: $('#band').value, slot: walker ? 0.25 : +$('#slot').value, walker: walker || '' }).then(j => {
   const n = j.party.order.length;
   $('#status').textContent = n < 2 ? 'Potrzeba co najmniej 3 telefonów.' : 'Piszczą... ' + Math.round(n * (+$('#slot').value) + 5) + ' s ciszy';
 });
@@ -84,7 +84,7 @@ $('#loop').onclick = () => { loop = !loop; $('#loop').classList.toggle('on', loo
 function maybeNextRound(p, done, now) { // continuous mode: next round once this one is in (or 8 s past its end)
   if (!loop || loopBusy || p.phase !== 'rollcall' || !p.round) return;
   const endMs = p.t0 + p.order.length * p.slot * 1000 + 1500;
-  if (done.length >= p.order.length || now > endMs + 8000) { loopBusy = true; $('#go').click(); setTimeout(() => loopBusy = false, 3000); }
+  if (done.length >= p.order.length || now > endMs + (p.walker ? 3000 : 8000)) { loopBusy = true; $('#go').click(); setTimeout(() => loopBusy = false, p.walker ? 800 : 3000); }
 }
 const store = (k, v) => { try { if (v === undefined) return localStorage.getItem(k); localStorage.setItem(k, v); } catch (e) {} };
 let tape = {}; try { tape = JSON.parse(store('dp_tape') || '{}'); } catch (e) {}
@@ -141,10 +141,12 @@ async function poll() {
   $('#cal').textContent = fit.n ? 'Poprawka z ' + fit.n + ' pomiarów taśmą: ' + (fit.shared * 100).toFixed(0) + ' cm na telefon' + (Object.keys(fit.k).length > 1 && fit.n >= Object.keys(fit.k).length ? ' (osobno dla każdego)' : ' (wspólna)') : 'bez pomiarów taśmą ani stosu';
   const used = dIds.filter(i => dists.some(x => x.a === i || x.b === i));
   let lay = null;
-  if (walker && frozen && used.filter(i => i !== walker && frozen[i]).length >= 3) { // walker mode: others frozen, walker placed alone on them
-    const one = Ranging.placeOne(frozen, dists, walker, target && target[walker]);
-    lay = { pos: { ...frozen }, rms: one ? one.rms : 0, suspect: [] }; if (one) lay.pos[walker] = { x: one.x, y: one.y };
-  } else if (used.length >= 3) { lay = Ranging.layout(used, dists, { iters: 200, robust: true, init: target }); frozen = { ...lay.pos }; } // springs, warm start
+  if (p.walker) { // a walker round never refits the room: the still phones keep the frozen map, the walker is placed alone on it
+    if (frozen && Object.keys(frozen).filter(i => i !== p.walker).length >= 3) {
+      const one = Ranging.placeOne(frozen, dists, p.walker, target && target[p.walker]);
+      lay = { pos: { ...frozen }, rms: one ? one.rms : 0, suspect: [] }; if (one) lay.pos[p.walker] = { x: one.x, y: one.y };
+    } else lay = target ? { pos: target, rms: 0, suspect: [] } : null;
+  } else if (used.length >= 3) { lay = Ranging.layout(used, dists, { iters: 200, robust: true, init: target }); frozen = { ...lay.pos }; } // full round: springs, warm start
   const sus = new Set((lay ? lay.suspect : []).map(x => x.a + '|' + x.b));
   $('#pairs').innerHTML = dists.length ? '<table><tr><th>para</th><th>z pisków (m)</th><th>taśma (m)</th><th>błąd</th></tr>' + dists.map(x => {
     const k = x.a + '|' + x.b, t = tape[k], err = t ? x.d - t : null;
@@ -152,7 +154,7 @@ async function poll() {
   }).join('') + '</table>' + (sus.size ? '<p class="muted" style="font-size:.75em">? = odległość odstaje od reszty sieci (pewnie ktoś zasłonił drogę dźwięku); waży mniej.</p>' : '') : '<p class="muted">Potrzeba co najmniej 2 telefonów, które się usłyszały.</p>';
   document.querySelectorAll('input.tape').forEach(i => i.onchange = () => { const v = parseFloat(i.value.replace(',', '.')); if (v > 0) tape[i.dataset.k] = v; else delete tape[i.dataset.k]; store('dp_tape', JSON.stringify(tape)); last = ''; });
   target = lay ? lay.pos : null; names = nm;
-  if (lay && walker && lay.pos[walker] && (!trail.length || trail[trail.length - 1].round !== p.round)) trail.push({ round: p.round, x: lay.pos[walker].x, y: lay.pos[walker].y, t: Date.now() });
+  if (lay && walker && p.walker === walker && lay.pos[walker] && (!trail.length || trail[trail.length - 1].round !== p.round)) trail.push({ round: p.round, x: lay.pos[walker].x, y: lay.pos[walker].y, t: Date.now() });
   if (trail.length > 40) trail.shift();
   $('#walkInfo').textContent = walker ? 'Idzie: ' + nm(walker) + (trail.length > 1 ? ' · od startu ' + (Math.hypot(trail[trail.length - 1].x - trail[0].x, trail[trail.length - 1].y - trail[0].y) * 100).toFixed(0) + ' cm, ostatni krok ' + (Math.hypot(trail[trail.length - 1].x - trail[trail.length - 2].x, trail[trail.length - 1].y - trail[trail.length - 2].y) * 100).toFixed(0) + ' cm' : ' · czekam na kolejne rundy') + ' (przytrzymaj znowu, żeby odznaczyć)' : '';
   const zeros = Object.entries(tape).filter(([, v]) => v <= 0.05).map(([k]) => k.split('|'));

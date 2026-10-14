@@ -31,7 +31,7 @@
       <li id="stInstall" data-ios="Opcjonalnie: stuknij Udostępnij, potem Do ekranu początkowego. Pełny ekran, nie gaśnie." data-android="Opcjonalnie: stuknij menu (trzy kropki), potem Zainstaluj aplikację." data-other="Opcjonalnie: zainstaluj tę stronę jako aplikację z menu przeglądarki."></li>
       <li id="stRinger" data-ios="Dzwonek WŁĄCZONY: boczny przełącznik nie może pokazywać pomarańczowego (tryb cichy wycisza tę stronę)." data-android="Dźwięk WŁĄCZONY: nie wyciszenie, nie wibracje." data-other="Dźwięk włączony."></li>
       <li>Głośność: stuknij <b>Ton</b> i podgłaśniaj, aż pasek zrobi się zielony.</li>
-      <li>Połóż telefon płasko, ekranem do góry, <b>górną krawędzią w stronę prowadzącego</b>. Wszyscy tak samo, wtedy każdy telefon słyszy podobnie.</li>
+      <li id="stFlat">Połóż telefon płasko, ekranem do góry, <b>górną krawędzią w stronę prowadzącego</b>. Wszyscy tak samo, wtedy każdy telefon słyszy podobnie.</li>
       <li>Stuknij <b>Test</b> i zezwól na mikrofon. Powinien rozlec się krótki gwizd.</li>
     </ol>
     <div class="row"><button class="big" id="tone">Ton</button><div id="meter"><i></i></div></div>
@@ -84,6 +84,7 @@ function readRing(from, len) { // samples [from, from+len) on this phone's own a
 const plat = /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1) ? 'ios' : /Android/.test(navigator.userAgent) ? 'android' : 'other';
 for (const li of document.querySelectorAll('[data-ios]')) li.textContent = li.dataset[plat];
 if (matchMedia('(display-mode: standalone)').matches || navigator.standalone) $('#stInstall').textContent = 'Zainstalowane. Super.';
+if (LOCATE) $('#stFlat').textContent = 'Połóż telefon tam, gdzie ma być, głośnikiem nie do stołu (np. na książce, bokiem). Kierunek nie ma znaczenia.';
 
 // compass: heading of the phone's top edge (iOS asks permission on a tap; Android gives absolute orientation)
 let heading = null, stageHeading = null, lastPose = 0;
@@ -92,8 +93,8 @@ async function compass() {
   const on = e => { const h = e.webkitCompassHeading != null ? e.webkitCompassHeading : (e.absolute && e.alpha != null ? (360 - e.alpha) % 360 : null); if (h != null) heading = h; };
   addEventListener('deviceorientationabsolute', on); addEventListener('deviceorientation', on);
 }
-function coach() { // tell the user which way to turn so the top edge faces the stage (= where the room points)
-  if (heading == null) { $('#dir').textContent = ''; return; }
+function coach() { // tell the user which way to turn so the top edge faces the stage (= where the room points); drone show only
+  if (heading == null || LOCATE) { $('#dir').textContent = ''; return; }
   if (Date.now() - lastPose > 2000) { lastPose = Date.now(); api('pose', { id, heading: Math.round(heading) }).catch(() => {}); }
   if (stageHeading == null) { $('#dir').textContent = 'Górna krawędź w stronę prowadzącego'; return; }
   const d = ((heading - stageHeading + 540) % 360) - 180;
@@ -124,7 +125,7 @@ async function test() {
 
 async function start() {
   const name = $('#name').value.trim(); store('dp_name', name);
-  if (heading == null) compass();
+  if (heading == null && !LOCATE) compass();
   try {
     await prepare();
     await syncClock();
@@ -177,7 +178,7 @@ function rollcall(p) { // beep in my slot, then find every beep on my own clock
   if (k < 0) { say('Dołączyłeś po starcie odliczania: poczekaj na następne.', ''); return; }
   const when = serverToCtx(p.t0 + k * p.slot * 1000);
   const s = ctx.createBufferSource(); s.buffer = chirpBuf; s.connect(out); s.start(Math.max(when, ctx.currentTime + 0.02));
-  say((LOCATE ? 'Piszczymy: ' : 'Odliczanie: ') + 'jesteś ' + (k + 1) + ' z ' + n, 'beep', 'nie ruszaj telefonu, cisza');
+  if (p.walker === id) say('Idziesz: piszczę pierwszy', 'beep', 'ruszaj się spokojnie'); else say((LOCATE ? 'Piszczymy: ' : 'Odliczanie: ') + 'jesteś ' + (k + 1) + ' z ' + n, 'beep', p.walker ? 'odpowiadam idącemu' : 'nie ruszaj telefonu, cisza');
   const doneAt = p.t0 + n * p.slot * 1000 + 900;
   setTimeout(async () => {
     const heard = {}, snr = {}, lvl = {};
@@ -189,7 +190,7 @@ function rollcall(p) { // beep in my slot, then find every beep on my own clock
     });
     await api('heard', { id, round: p.round, heard, snr, lvl });
     const others = p.order.filter(o => o !== id), nameOf = o => (p.names && p.names[o]) || o; // toast: whom I heard, whom I missed
-    if (others.length) toast('Słyszę: ' + others.map(o => nameOf(o) + (Number.isFinite(heard[o]) ? ' ✓' : ' ✗')).join(', '), others.some(o => !Number.isFinite(heard[o])));
+    if (others.length && !p.walker) toast('Słyszę: ' + others.map(o => nameOf(o) + (Number.isFinite(heard[o]) ? ' ✓' : ' ✗')).join(', '), others.some(o => !Number.isFinite(heard[o])));
     say('Usłyszałem ' + Object.keys(heard).length + ' z ' + n + ' pisków.', 'ok', LOCATE ? 'wynik na ekranie bazy' : 'teraz nasłuchuję dronów');
   }, Math.max(0, doneAt - (Date.now() + off)));
 }
