@@ -52,6 +52,9 @@
     <p class="muted" style="font-size:.75em"><b>Obchód dotykowy:</b> w trybie Ciągle przyłóż idący telefon do każdego urządzenia na ~3 s. Każdy dotyk kalibruje odległość i głośność tego urządzenia względem idącego.</p>
     <p class="muted" id="tour" style="font-size:.75em"></p>
     <p class="muted" id="cal" style="font-size:.75em"></p>
+    <p class="label">Opóźnienie audio</p>
+    <p class="muted" style="font-size:.75em">Co każdy telefon zgłasza o swojej ścieżce dźwięku (wyjście = głośnik, baza = wejście). Odejmowane od znacznika własnego pisku.</p>
+    <div class="grid" id="latency"></div>
     <p class="label">Profil głośności</p>
     <p class="muted" style="font-size:.75em">Względem pierwszego telefonu z par "zero": o ile głośniej gra (głośnik) i słyszy (mikrofon).</p>
     <div class="grid" id="profile"></div>
@@ -221,6 +224,7 @@ async function poll() {
     }
   }
   $('#profile').innerHTML = Object.keys(prof).length > 1 ? '<table><tr><th>telefon</th><th>głośnik</th><th>mikrofon</th></tr>' + Object.entries(prof).map(([id, v]) => '<tr><td>' + nm(id) + '</td><td>' + (v.spk >= 0 ? '+' : '') + v.spk.toFixed(1) + ' dB</td><td>' + (v.mic >= 0 ? '+' : '') + v.mic.toFixed(1) + ' dB</td></tr>').join('') + '</table>' : '<p class="muted" style="font-size:.75em">Pojawi się po pierwszej parze "zero".</p>';
+  $('#latency').innerHTML = '<table><tr><th>telefon</th><th>wyjście</th><th>baza</th><th>Hz</th></tr>' + d.members.filter(m => m.age < 60).map(m => '<tr><td>' + nm(m.id) + '</td>' + (m.lat ? '<td>' + (m.lat.out * 1000).toFixed(1) + ' ms</td><td>' + (m.lat.base * 1000).toFixed(1) + ' ms</td><td>' + m.lat.sr + '</td>' : '<td colspan="3" class="muted">stara strona, przeładuj</td>') + '</tr>').join('') + '</table>';
   if (walker) { const todo = dIds.filter(i => i !== walker && !touches[i]); $('#tour').innerHTML = 'Dotknięte: ' + (Object.keys(touches).length ? Object.keys(touches).map(nm).join(', ') : 'nic') + (todo.length ? ' · <span style="color:var(--warn)">zostało: ' + todo.map(nm).join(', ') + '</span>' : ' · <span style="color:var(--ok)">wszystkie</span>'); } else $('#tour').textContent = Object.keys(touches).length ? 'Dotknięte: ' + Object.keys(touches).map(nm).join(', ') : '';
   $('#fit').textContent = lay ? 'zgodność ±' + lay.rms.toFixed(2) + ' m' + (useMedian && roundsForMed.length >= 2 ? ' · mediana z ' + roundsForMed.length + ' rund' : '') + (sus.size ? ' · odstające pary: ' + sus.size : '') : '';
 }
