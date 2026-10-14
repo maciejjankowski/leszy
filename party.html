@@ -124,13 +124,13 @@ async function test() {
 }
 
 async function start() {
-  const name = $('#name').value.trim(); store('dp_name', name);
+  const name = $('#name').value.trim(); store('dp_name', name); store('dp_joined', '1'); // remembered across a hot reload
   if (heading == null && !LOCATE) compass();
   try {
     await prepare();
     await syncClock();
     await api('join', { id, name: name || id, role });
-  } catch (e) { prepared = null; $('#err').textContent = 'Nie udało się uruchomić: ' + e.message + (isSecureContext ? '' : ' (wymaga https)'); return; }
+  } catch (e) { prepared = null; $('#err').textContent = 'Nie udało się uruchomić: ' + e.message + (isSecureContext ? '' : ' (wymaga https)') + (store('dp_joined') === '1' ? ' · stuknij Dołącz' : ''); return; } // an auto-rejoin that iOS blocks (no tap yet) just asks for a tap
   try { lock = await navigator.wakeLock.request('screen'); } catch (e) {}
   $('#joinBox').hidden = true; $('#runBox').hidden = false;
   say(role ? 'SCENA ' + (role === 'L' ? 'LEWA' : 'PRAWA') : (LOCATE ? 'Jesteś w grze. Czekam na start...' : 'Jesteś w grze. Czekam na odliczanie...'), 'ok', name);
@@ -240,6 +240,8 @@ async function tone() {
   })();
 }
 $('#go').onclick = start; $('#test').onclick = test; $('#tone').onclick = tone;
+// after a hot reload: rejoin by itself (mic permission is already granted for this site; audio may need one tap on iOS, then it says so)
+if (store('dp_joined') === '1' && !LOOP) start().catch(() => {});
 document.addEventListener('visibilitychange', () => { if (!document.hidden && ctx) ctx.resume(); });
 </script>
 </html>
