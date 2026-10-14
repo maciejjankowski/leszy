@@ -13,7 +13,8 @@ $db->exec('PRAGMA journal_mode=WAL; PRAGMA busy_timeout=3000;');
 $db->exec('CREATE TABLE IF NOT EXISTS kv (k TEXT PRIMARY KEY, v TEXT)');
 $db->exec('CREATE TABLE IF NOT EXISTS members (id TEXT PRIMARY KEY, name TEXT, role TEXT, joined REAL, seen REAL, round INTEGER DEFAULT -1, heard TEXT, levels TEXT, lt REAL)');
 try { $db->exec('ALTER TABLE members ADD COLUMN heading REAL'); } catch (Exception $e) {}
-try { $db->exec('ALTER TABLE members ADD COLUMN snr TEXT'); } catch (Exception $e) {} // how clearly each beep was heard // compass heading, degrees
+try { $db->exec('ALTER TABLE members ADD COLUMN snr TEXT'); } catch (Exception $e) {}
+try { $db->exec('ALTER TABLE members ADD COLUMN lvl TEXT'); } catch (Exception $e) {} // how loud each beep arrived (dB) // how clearly each beep was heard // compass heading, degrees
 
 function out($a) { echo json_encode($a); exit; }
 function body() { return json_decode(file_get_contents('php://input'), true) ?: []; }
@@ -61,8 +62,8 @@ if ($a === 'pose') { // the phone's compass heading (top edge direction)
 
 if ($a === 'heard') { // arrival times of every beep, on the phone's own audio clock
   $b = body(); $id = cleanId($b['id'] ?? '');
-  $db->prepare('UPDATE members SET heard = ?, snr = ?, round = ?, seen = ? WHERE id = ?')
-     ->execute([json_encode($b['heard'] ?? new stdClass), json_encode($b['snr'] ?? new stdClass), (int)($b['round'] ?? -1), $now, $id]);
+  $db->prepare('UPDATE members SET heard = ?, snr = ?, lvl = ?, round = ?, seen = ? WHERE id = ?')
+     ->execute([json_encode($b['heard'] ?? new stdClass), json_encode($b['snr'] ?? new stdClass), json_encode($b['lvl'] ?? new stdClass), (int)($b['round'] ?? -1), $now, $id]);
   out(['ok' => 1]);
 }
 
@@ -77,7 +78,7 @@ if ($a === 'data') { // the stage screen reads everything
   $rows->execute([$now - 120]);
   $m = array_map(fn($r) => ['id' => $r['id'], 'name' => $r['name'], 'role' => $r['role'], 'age' => round($now - $r['seen'], 1),
     'round' => (int)$r['round'], 'heard' => json_decode($r['heard'] ?? 'null', true), 'levels' => json_decode($r['levels'] ?? 'null', true),
-    'lage' => $r['lt'] ? round($now - $r['lt'], 1) : null, 'heading' => $r['heading'] === null ? null : (float)$r['heading'], 'snr' => json_decode($r['snr'] ?? 'null', true)], $rows->fetchAll(PDO::FETCH_ASSOC));
+    'lage' => $r['lt'] ? round($now - $r['lt'], 1) : null, 'heading' => $r['heading'] === null ? null : (float)$r['heading'], 'snr' => json_decode($r['snr'] ?? 'null', true), 'lvl' => json_decode($r['lvl'] ?? 'null', true)], $rows->fetchAll(PDO::FETCH_ASSOC));
   out(['t' => $now * 1000, 'party' => party($db), 'members' => $m, 'stage' => stageHeading($db, $now)]);
 }
 
@@ -86,7 +87,7 @@ if ($a === 'admin') { // stage screen controls
   $live = $db->prepare('SELECT id, name FROM members WHERE seen > ? ORDER BY joined'); $live->execute([$now - 10]);
   $names = $live->fetchAll(PDO::FETCH_KEY_PAIR); $ids = array_keys($names); // names travel with the round, so phones can say whom they heard
   if ($cmd === 'rollcall') { // everyone beeps once, 0.5 s apart, starting 4 s from now
-    $p = ['phase' => 'rollcall', 'round' => ($p['round'] ?? 0) + 1, 't0' => ($now + 4) * 1000, 'slot' => 0.5, 'order' => $ids, 'names' => $names, 'band' => [8000, 12000], 'drones' => []];
+    $p = ['phase' => 'rollcall', 'round' => ($p['round'] ?? 0) + 1, 't0' => ($now + 4) * 1000, 'slot' => 0.5, 'order' => $ids, 'names' => $names, 'band' => ['mid' => [2000, 6000], 'quiet' => [14000, 18000]][$b['band'] ?? ''] ?? [8000, 12000], 'drones' => []];
   } elseif ($cmd === 'drones') { // k random audience phones become drones, each with its own rotor pitch
     $pool = $db->prepare("SELECT id FROM members WHERE seen > ? AND role = 'audience'"); $pool->execute([$now - 10]);
     $cand = $pool->fetchAll(PDO::FETCH_COLUMN); shuffle($cand);

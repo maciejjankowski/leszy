@@ -12,6 +12,7 @@ let seed = 5; const rnd = () => ((seed = (seed * 1664525 + 1013904223) >>> 0) / 
   const seats = [{ x: -3, y: 1, role: 'L', name: 'stage-L' }, { x: 3, y: 1, role: 'R', name: 'stage-R' }];
   const names = ['Ania', 'Bartek', 'Celina', 'Darek', 'Ewa', 'Filip', 'Gosia', 'Hubert', 'Iza', 'Janek', 'Kasia', 'Leon'];
   names.forEach((n, i) => seats.push({ x: -3 + (i % 4) * 2 + (rnd() - 0.5) * 0.4, y: -2 - Math.floor(i / 4) * 1.5, role: 'audience', name: n }));
+  seats[3].x = seats[2].x; seats[3].y = seats[2].y; // Ania + Bartek piled together, to test the pile calibration
   const ids = seats.map((_, i) => 'sim' + i);
   for (let i = 0; i < seats.length; i++) await post('join', { id: ids[i], name: seats[i].name, role: seats[i].role });
   const rc = await post('admin', { cmd: 'rollcall' });
@@ -19,12 +20,14 @@ let seed = 5; const rnd = () => ((seed = (seed * 1664525 + 1013904223) >>> 0) / 
   // each phone's arrival times on its own clock: clock offset + playback latency + flight time + jitter
   const clock = ids.map(() => rnd() * 40), lat = ids.map(() => 0.02 + rnd() * 0.12);
   for (let i = 0; i < ids.length; i++) {
-    const heard = {};
+    const heard = {}, lvl = {}; // lvl: how loud each beep arrived; iPad-class seats 2 and 5 play +6 dB louder, seat 5 also hears +3 dB
+    const spk = i => (i === 2 || i === 5 ? 6 : 0), mic = i => (i === 5 ? 3 : 0);
     order.forEach((src, k) => {
-      const j = ids.indexOf(src), d = Math.hypot(seats[i].x - seats[j].x, seats[i].y - seats[j].y) + (i === j ? 0.1 : 0);
+      const j = ids.indexOf(src), d = Math.hypot(seats[i].x - seats[j].x, seats[i].y - seats[j].y) + 0.05 + (i === j ? 0.05 : 0); // 5 cm speaker-mic gap per phone
       heard[src] = clock[i] + k * 0.5 + lat[j] + d / R.C + (rnd() - 0.5) * 0.0002; // +-0.1 ms detection jitter
+      lvl[src] = +(-20 - 20 * Math.log10(Math.max(d, 0.1)) + spk(j) + mic(i) + (i === j ? 10 : 0)).toFixed(1);
     });
-    await post('heard', { id: ids[i], round, heard });
+    await post('heard', { id: ids[i], round, heard, lvl });
     await post('pose', { id: ids[i], heading: i === 4 ? 70 : 10 + (rnd() - 0.5) * 16 }); // one phone (Celina) turned 60 degrees off
   }
   const dr = await post('admin', { cmd: 'drones', k: 1 }), drone = dr.party.drones[0], di = ids.indexOf(drone.id);

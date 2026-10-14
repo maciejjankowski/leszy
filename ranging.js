@@ -11,7 +11,7 @@
 
   // ---------- chirp + matched filter (from P074) ----------
   function makeChirp(sr, f0, f1, dur = 0.04) {
-    const n = Math.round(sr * dur), re = new Float32Array(n), im = new Float32Array(n), k = (f1 - f0) / dur, a = 0.15;
+    const n = Math.round(sr * dur), re = new Float32Array(n), im = new Float32Array(n), k = (f1 - f0) / dur, a = 0.4; // soft edges: no click
     for (let i = 0; i < n; i++) {
       const t = i / sr, ph = 2 * Math.PI * (f0 * t + k * t * t / 2), x = i / (n - 1); // Tukey window
       const w = x < a / 2 ? 0.5 * (1 - Math.cos(2 * Math.PI * x / a)) : x > 1 - a / 2 ? 0.5 * (1 - Math.cos(2 * Math.PI * (1 - x) / a)) : 1;
@@ -63,21 +63,41 @@
     while (i + 1 < env.length && env[i + 1] > env[i]) i++;
     let frac = 0;
     if (i > 0 && i + 1 < env.length) { const y0 = env[i - 1], y1 = env[i], y2 = env[i + 1], den = y0 - 2 * y1 + y2; if (den) frac = 0.5 * (y0 - y2) / den; }
-    return { sample: i + frac, snr };
+    return { sample: i + frac, snr, peak: mv }; // peak = how loud the beep arrived (for device profiles)
   }
 
   // ---------- distances ----------
   // heard[x][y] = time (s, on phone x's own clock) phone x heard phone y's beep.
-  function pairDistances(ids, heard) {
-    const out = [];
+  // The formula comes out short by half of each phone's own speaker-to-mic gap; offset[id] adds that back
+  // (fitted from tape-measured pairs, see fitOffsets). c = speed of sound for the room (soundSpeed).
+  function pairDistances(ids, heard, opts = {}) {
+    const out = [], c = opts.c || C, off = opts.offset || {};
     for (let a = 0; a < ids.length; a++) for (let b = a + 1; b < ids.length; b++) {
       const A = heard[ids[a]] || {}, B = heard[ids[b]] || {};
       const v = [A[ids[a]], A[ids[b]], B[ids[a]], B[ids[b]]];
       if (v.some(t => !Number.isFinite(t))) continue;
-      const d = C / 2 * ((v[1] - v[0]) - (v[3] - v[2]));
-      if (d > -0.3 && d < 60) out.push({ a: ids[a], b: ids[b], d: Math.max(d, 0.05) });
+      const raw = c / 2 * ((v[1] - v[0]) - (v[3] - v[2])), d = raw + (off[ids[a]] || 0) + (off[ids[b]] || 0);
+      if (d > -0.3 && d < 60) out.push({ a: ids[a], b: ids[b], d: Math.max(d, 0.05), raw });
     }
     return out;
+  }
+  const soundSpeed = tC => 331.3 + 0.606 * tC; // m/s; 20 C -> 343.4
+
+  // Per-phone offsets from tape-measured pairs: raw + k_a + k_b = tape. Few pairs -> one shared k for all
+  // phones; enough pairs -> least squares per phone, pulled toward the shared k (ridge).
+  function fitOffsets(dists, tape) {
+    const eq = dists.filter(x => tape[x.a + "|" + x.b] > 0).map(x => ({ a: x.a, b: x.b, r: tape[x.a + "|" + x.b] - x.raw }));
+    if (!eq.length) return { k: {}, shared: 0, n: 0 };
+    const shared = eq.reduce((s, e) => s + e.r, 0) / eq.length / 2;
+    const ids = [...new Set(eq.flatMap(e => [e.a, e.b]))], k = Object.fromEntries(ids.map(i => [i, shared]));
+    if (eq.length >= ids.length) { // Gauss-Seidel on the normal equations with a ridge toward the shared k
+      for (let it = 0; it < 200; it++) for (const i of ids) {
+        let num = 0.5 * shared, den = 0.5;
+        for (const e of eq) if (e.a === i) { num += e.r - k[e.b]; den++; } else if (e.b === i) { num += e.r - k[e.a]; den++; }
+        k[i] = num / den;
+      }
+    }
+    return { k, shared, n: eq.length };
   }
 
   // ---------- small linear algebra ----------
@@ -106,23 +126,14 @@
     return { vecs, vals };
   }
 
-  // ---------- MDS ----------
-  // dists: [{a, b, d, w?}] over ids. Missing pairs allowed (filled by shortest path only for the start).
-  function layout(ids, dists, iters = 300) {
-    const n = ids.length, ix = new Map(ids.map((id, i) => [id, i]));
-    const D = Array.from({ length: n }, () => Array(n).fill(Infinity)), W = Array.from({ length: n }, () => Array(n).fill(0));
-    for (let i = 0; i < n; i++) D[i][i] = 0;
-    for (const { a, b, d, w = 1 } of dists) { const i = ix.get(a), j = ix.get(b); if (i === undefined || j === undefined) continue; D[i][j] = D[j][i] = d; W[i][j] = W[j][i] = w; }
-    // start: classical MDS on shortest-path-completed distances
-    const G = D.map(r => r.slice());
-    for (let k = 0; k < n; k++) for (let i = 0; i < n; i++) for (let j = 0; j < n; j++) if (G[i][k] + G[k][j] < G[i][j]) G[i][j] = G[i][k] + G[k][j];
-    const big = Math.max(...G.flat().filter(Number.isFinite), 1);
-    const D2 = G.map(r => r.map(v => (Number.isFinite(v) ? v : big * 1.5) ** 2));
-    const rm = D2.map(r => r.reduce((s, v) => s + v, 0) / n), gm = rm.reduce((s, v) => s + v, 0) / n;
-    const B = D2.map((r, i) => r.map((v, j) => -0.5 * (v - rm[i] - rm[j] + gm)));
-    const { vecs, vals } = top2(B);
-    let X = ids.map((_, i) => [vecs[0][i] * Math.sqrt(Math.max(vals[0], 1e-9)), vecs[1][i] * Math.sqrt(Math.max(vals[1], 1e-9))]);
-    // SMACOF: weighted stress majorization (Guttman transform), handles missing pairs via W = 0
+  // ---------- layout: a network of springs ----------
+  // Each measured pair is a spring whose rest length is the measured distance; SMACOF (stress majorization)
+  // finds the lowest-energy layout, step by step. Missing pairs = no spring.
+  //   opts.init   {id: {x, y}}  warm start (e.g. the previous map), so the map settles instead of jumping
+  //   opts.robust true          springs that stay stretched far beyond the rest get weaker (blocked paths read long)
+  //   opts.iters  steps per pass
+  function smacofSteps(X, D, W, iters) {
+    const n = X.length;
     const V = W.map((r, i) => r.map((w, j) => (i === j ? r.reduce((s, x, k) => s + (k === i ? 0 : x), 0) : -w)));
     const Vp = inverse(V.map(r => r.map(v => v + 1 / n))).map(r => r.map(v => v - 1 / n));
     for (let it = 0; it < iters; it++) {
@@ -136,9 +147,45 @@
       const BX = Bx.map(r => [r.reduce((s, v, j) => s + v * X[j][0], 0), r.reduce((s, v, j) => s + v * X[j][1], 0)]);
       X = Vp.map(r => [r.reduce((s, v, j) => s + v * BX[j][0], 0), r.reduce((s, v, j) => s + v * BX[j][1], 0)]);
     }
+    return X;
+  }
+  function layout(ids, dists, iters = 300, opts = {}) {
+    if (typeof iters === "object") { opts = iters; iters = opts.iters || 300; }
+    const n = ids.length, ix = new Map(ids.map((id, i) => [id, i]));
+    const D = Array.from({ length: n }, () => Array(n).fill(Infinity)), W = Array.from({ length: n }, () => Array(n).fill(0));
+    for (let i = 0; i < n; i++) D[i][i] = 0;
+    const used = [];
+    for (const p of dists) { const i = ix.get(p.a), j = ix.get(p.b); if (i === undefined || j === undefined) continue; D[i][j] = D[j][i] = p.d; W[i][j] = W[j][i] = p.w || 1; used.push([i, j, p]); }
+    let X;
+    const init = opts.init || {};
+    if (ids.filter(id => init[id]).length >= Math.max(3, n - 2)) { // warm start: known phones keep their place, new ones start near the middle
+      const known = ids.filter(id => init[id]), cx = known.reduce((s, id) => s + init[id].x, 0) / known.length, cy = known.reduce((s, id) => s + init[id].y, 0) / known.length;
+      X = ids.map((id, i) => init[id] ? [init[id].x, init[id].y] : [cx + Math.cos(i * 2.4) * 0.5, cy + Math.sin(i * 2.4) * 0.5]);
+    } else { // cold start: classical MDS on shortest-path-completed distances
+      const G = D.map(r => r.slice());
+      for (let k = 0; k < n; k++) for (let i = 0; i < n; i++) for (let j = 0; j < n; j++) if (G[i][k] + G[k][j] < G[i][j]) G[i][j] = G[i][k] + G[k][j];
+      const big = Math.max(...G.flat().filter(Number.isFinite), 1);
+      const D2 = G.map(r => r.map(v => (Number.isFinite(v) ? v : big * 1.5) ** 2));
+      const rm = D2.map(r => r.reduce((s, v) => s + v, 0) / n), gm = rm.reduce((s, v) => s + v, 0) / n;
+      const B = D2.map((r, i) => r.map((v, j) => -0.5 * (v - rm[i] - rm[j] + gm)));
+      const { vecs, vals } = top2(B);
+      X = ids.map((_, i) => [vecs[0][i] * Math.sqrt(Math.max(vals[0], 1e-9)), vecs[1][i] * Math.sqrt(Math.max(vals[1], 1e-9))]);
+    }
+    X = smacofSteps(X, D, W, iters);
+    const suspect = [];
+    if (opts.robust) for (let pass = 0; pass < 3; pass++) { // weaken springs whose length disagrees with the rest of the network
+      for (const [i, j, p] of used) {
+        const e = D[i][j] - Math.hypot(X[i][0] - X[j][0], X[i][1] - X[j][1]); // > 0: measured longer than the map allows
+        W[i][j] = W[j][i] = (p.w || 1) / (1 + (e / 0.3) ** 2);
+      }
+      X = smacofSteps(X, D, W, Math.ceil(iters / 2));
+    }
     let stress = 0, cnt = 0;
-    for (const { a, b, d } of dists) { const i = ix.get(a), j = ix.get(b); if (i === undefined || j === undefined) continue; const e = Math.hypot(X[i][0] - X[j][0], X[i][1] - X[j][1]) - d; stress += e * e; cnt++; }
-    return { pos: Object.fromEntries(ids.map((id, i) => [id, { x: X[i][0], y: X[i][1] }])), rms: Math.sqrt(stress / Math.max(cnt, 1)) };
+    for (const [i, j, p] of used) {
+      const e = Math.hypot(X[i][0] - X[j][0], X[i][1] - X[j][1]) - p.d;
+      if (opts.robust && W[i][j] < 0.5 * (p.w || 1)) suspect.push({ a: p.a, b: p.b, off: -e }); else { stress += e * e; cnt++; }
+    }
+    return { pos: Object.fromEntries(ids.map((id, i) => [id, { x: X[i][0], y: X[i][1] }])), rms: Math.sqrt(stress / Math.max(cnt, 1)), suspect };
   }
 
   // Turn the map the right way round: stage-left -> stage-right is the +x axis, stage on top,
@@ -169,6 +216,6 @@
     return p > 0 ? 10 * Math.log10(p) : -140;
   }
 
-  const api = { C, makeChirp, xcorrEnv, detectFirst, pairDistances, layout, orient, combLevel };
+  const api = { C, soundSpeed, makeChirp, xcorrEnv, detectFirst, pairDistances, fitOffsets, layout, orient, combLevel };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.Ranging = api;
 })(typeof self !== 'undefined' ? self : this);

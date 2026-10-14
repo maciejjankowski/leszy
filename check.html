@@ -17,6 +17,7 @@
   .grid { overflow-x: auto; }
   table { border-collapse: collapse; font-size: .8em; }
   th, td { border: 1px solid var(--line); padding: 4px 6px; text-align: center; white-space: nowrap; }
+  tr.sus td { color: var(--warn); }
   td.ok { color: var(--ok); } td.bad { color: var(--hot); } td.self { color: var(--dim); }
   input.tape { width: 4.5em; padding: .2em; }
   #toasts { position: fixed; right: 12px; bottom: max(12px, env(safe-area-inset-bottom)); display: flex; flex-direction: column; gap: 6px; z-index: 50; max-width: min(90vw, 340px); }
@@ -37,6 +38,14 @@
     <p class="label">Kto kogo usłyszał</p>
     <p class="muted" style="font-size:.75em">wiersz słucha, kolumna piszczy · poniżej 8 = nie usłyszał</p>
     <div class="grid" id="matrix"></div>
+    <p class="label">Kalibracja</p>
+    <p class="row" style="font-size:.85em">temperatura <input id="temp" type="number" step="1" style="width:4em;padding:.2em"> °C · pasmo <select id="band" style="padding:.2em"><option value="high">wysokie 8-12 kHz</option><option value="mid">średnie 2-6 kHz (głośniejsze, omija ludzi)</option><option value="quiet">ciche 14-18 kHz (ledwo słyszalne, krótszy zasięg)</option></select></p>
+    <p class="muted" style="font-size:.75em">Połóż 2 lub więcej telefonów na jednym stosie i stuknij je po kolei na mapie: stos kalibruje odległość i głośność. Albo wpisz taśmą 1-2 odległości poniżej.</p>
+    <p class="muted" id="zeroList" style="font-size:.75em"></p>
+    <p class="muted" id="cal" style="font-size:.75em"></p>
+    <p class="label">Profil głośności</p>
+    <p class="muted" style="font-size:.75em">Względem pierwszego telefonu z par "zero": o ile głośniej gra (głośnik) i słyszy (mikrofon).</p>
+    <div class="grid" id="profile"></div>
     <p class="label">Odległości</p>
     <p class="muted" style="font-size:.75em">wpisz zmierzoną taśmą, zobaczysz błąd</p>
     <div class="grid" id="pairs"></div>
@@ -59,12 +68,16 @@ const joinUrl = location.href.replace(/check\.html.*$/, 'party.html') + '?room='
   const w = Math.min(260, innerWidth - 80);
   try { new QRCode($('#qr'), { text: u, width: w, height: w }); } catch (e) {}
 })();
-$('#go').onclick = () => hub('admin', { cmd: 'rollcall' }).then(j => {
+$('#go').onclick = () => hub('admin', { cmd: 'rollcall', band: $('#band').value }).then(j => {
   const n = j.party.order.length;
   $('#status').textContent = n < 2 ? 'Potrzeba co najmniej 3 telefonów.' : 'Piszczą... ' + Math.round(n * 0.5 + 5) + ' s ciszy';
 });
 $('#reset').onclick = () => { hub('admin', { cmd: 'reset' }); last = ''; };
-const tape = {};
+const store = (k, v) => { try { if (v === undefined) return localStorage.getItem(k); localStorage.setItem(k, v); } catch (e) {} };
+let tape = {}; try { tape = JSON.parse(store('dp_tape') || '{}'); } catch (e) {}
+$('#temp').value = store('dp_temp') || 21; $('#band').value = store('dp_band') || 'high';
+$('#temp').onchange = () => { store('dp_temp', $('#temp').value); last = ''; };
+$('#band').onchange = () => store('dp_band', $('#band').value);
 const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
 const toasted = new Set();
@@ -91,7 +104,7 @@ async function poll() {
     short.slice(0, 3).forEach(t => toast(t, true));
     if (short.length > 3) toast('...i jeszcze ' + (short.length - 3) + ' z brakami (tabela obok)', true);
   }
-  const key = JSON.stringify(done.map(m => [m.id, m.round, m.heard])) + JSON.stringify(tape);
+  const key = JSON.stringify(done.map(m => [m.id, m.round, m.heard])) + JSON.stringify(tape) + $('#temp').value;
   if (key === last) return; last = key;
   const ids = (p.order || []).filter(id => d.members.some(m => m.id === id)), by = Object.fromEntries(d.members.map(m => [m.id, m]));
   const nm = id => esc((by[id] && by[id].name) || id);
@@ -102,32 +115,80 @@ async function poll() {
     return '<td class="' + (r === c ? 'self' : heard ? 'ok' : 'bad') + '">' + (s == null ? '-' : s) + (heard ? '' : ' x') + '</td>';
   }).join('') + '</tr>';
   $('#matrix').innerHTML = ids.length ? h + '</table>' : '<p class="muted">Jeszcze nie było rundy.</p>';
-  const heard = Object.fromEntries(done.map(m => [m.id, m.heard])), dists = Ranging.pairDistances(done.map(m => m.id), heard);
+  const heard = Object.fromEntries(done.map(m => [m.id, m.heard])), c = Ranging.soundSpeed(+$('#temp').value || 21), dIds = done.map(m => m.id);
+  const rawD = Ranging.pairDistances(dIds, heard, { c }), notPile = Object.keys(tape).filter(k => tape[k] <= 0.05 && rawD.some(x => x.a + '|' + x.b === k && x.raw > 1));
+  const tapeOk = Object.fromEntries(Object.entries(tape).filter(([k]) => !notPile.includes(k)));
+  const fit = Ranging.fitOffsets(rawD, tapeOk); // tape-measured pairs -> per-phone speaker-mic offset
+  const offset = Object.fromEntries(dIds.map(i => [i, fit.k[i] ?? fit.shared]));
+  const dists = Ranging.pairDistances(dIds, heard, { c, offset });
+  $('#cal').textContent = fit.n ? 'Poprawka z ' + fit.n + ' pomiarów taśmą: ' + (fit.shared * 100).toFixed(0) + ' cm na telefon' + (Object.keys(fit.k).length > 1 && fit.n >= Object.keys(fit.k).length ? ' (osobno dla każdego)' : ' (wspólna)') + ' · c = ' + c.toFixed(1) + ' m/s' : 'c = ' + c.toFixed(1) + ' m/s · bez pomiarów taśmą';
+  const used = dIds.filter(i => dists.some(x => x.a === i || x.b === i));
+  const lay = used.length >= 3 ? Ranging.layout(used, dists, { iters: 200, robust: true, init: target }) : null; // springs, warm start from the last map
+  const sus = new Set((lay ? lay.suspect : []).map(x => x.a + '|' + x.b));
   $('#pairs').innerHTML = dists.length ? '<table><tr><th>para</th><th>z pisków (m)</th><th>taśma (m)</th><th>błąd</th></tr>' + dists.map(x => {
     const k = x.a + '|' + x.b, t = tape[k], err = t ? x.d - t : null;
-    return '<tr><td>' + nm(x.a) + ' - ' + nm(x.b) + '</td><td>' + x.d.toFixed(2) + '</td><td><input class="tape" data-k="' + k + '" inputmode="decimal" value="' + (t || '') + '"></td><td>' + (err == null ? '' : (err >= 0 ? '+' : '') + err.toFixed(2)) + '</td></tr>';
-  }).join('') + '</table>' : '<p class="muted">Potrzeba co najmniej 2 telefonów, które się usłyszały.</p>';
-  document.querySelectorAll('input.tape').forEach(i => i.onchange = () => { const v = parseFloat(i.value.replace(',', '.')); if (v > 0) tape[i.dataset.k] = v; else delete tape[i.dataset.k]; });
-  const used = done.map(m => m.id).filter(i => dists.some(x => x.a === i || x.b === i));
-  drawMap(used.length >= 3 ? Ranging.layout(used, dists, 200) : null, nm);
+    return '<tr' + (sus.has(k) ? ' class="sus" title="odstaje od reszty: pewnie zasłonięta ścieżka"' : '') + '><td>' + nm(x.a) + ' - ' + nm(x.b) + (sus.has(k) ? ' ?' : '') + '</td><td>' + x.d.toFixed(2) + '</td><td><input class="tape" data-k="' + k + '" inputmode="decimal" value="' + (t || '') + '"></td><td>' + (err == null ? '' : (err >= 0 ? '+' : '') + err.toFixed(2)) + '</td></tr>';
+  }).join('') + '</table>' + (sus.size ? '<p class="muted" style="font-size:.75em">? = odległość odstaje od reszty sieci (pewnie ktoś zasłonił drogę dźwięku); waży mniej.</p>' : '') : '<p class="muted">Potrzeba co najmniej 2 telefonów, które się usłyszały.</p>';
+  document.querySelectorAll('input.tape').forEach(i => i.onchange = () => { const v = parseFloat(i.value.replace(',', '.')); if (v > 0) tape[i.dataset.k] = v; else delete tape[i.dataset.k]; store('dp_tape', JSON.stringify(tape)); last = ''; });
+  target = lay ? lay.pos : null; names = nm;
+  const zeros = Object.entries(tape).filter(([, v]) => v <= 0.05).map(([k]) => k.split('|'));
+  const pileIds = [...new Set(zeros.flat())];
+  $('#zeroList').innerHTML = (notPile.length ? '<span style="color:var(--warn)">Te telefony nie leżą razem (piski mówią ponad 1 m): ' + notPile.map(k => k.split('|').map(nm).join(' + ')).join(', ') + '. Pomijam.</span><br>' : '') + (pileIds.length ? 'Razem na stosie: ' + pileIds.map(nm).join(' + ') + ' <span class="muted">(stuknij telefon, żeby dodać lub zdjąć; stuknij puste miejsce, żeby skończyć)</span>' : '');
+  // level profile: for a touching pair A,B the beep of A heard by B vs the beep of B heard by A -> speaker and mic
+  // differences relative to a reference phone (the first phone of the first zero pair). lvl[x][y] = how loud x heard y.
+  const prof = {};
+  if (zeros.length) {
+    const ref = zeros[0][0]; prof[ref] = { spk: 0, mic: 0 };
+    for (let pass = 0; pass < 3; pass++) for (const [a, b] of zeros) for (const [x, y] of [[a, b], [b, a]]) {
+      if (prof[x] && !prof[y] && by[x] && by[y] && by[x].lvl && by[y].lvl && Number.isFinite(by[x].lvl[y]) && Number.isFinite(by[y].lvl[x]) && Number.isFinite(by[x].lvl[x]) && Number.isFinite(by[y].lvl[y])) {
+        // y heard x: lvl[y][x] = spk(x) + mic(y) + K ; x heard y: lvl[x][y] = spk(y) + mic(x) + K ; own beep: lvl[x][x] = spk(x) + mic(x) + K0
+        const dSpkMic = (by[x].lvl[y] - by[y].lvl[x]); // = (spk(y) - spk(x)) - (mic(y) - mic(x))
+        const dOwn = by[y].lvl[y] - by[x].lvl[x];        // = (spk(y) - spk(x)) + (mic(y) - mic(x))
+        prof[y] = { spk: prof[x].spk + (dSpkMic + dOwn) / 2, mic: prof[x].mic + (dOwn - dSpkMic) / 2 }; // solve the two equations
+      }
+    }
+  }
+  $('#profile').innerHTML = Object.keys(prof).length > 1 ? '<table><tr><th>telefon</th><th>głośnik</th><th>mikrofon</th></tr>' + Object.entries(prof).map(([id, v]) => '<tr><td>' + nm(id) + '</td><td>' + (v.spk >= 0 ? '+' : '') + v.spk.toFixed(1) + ' dB</td><td>' + (v.mic >= 0 ? '+' : '') + v.mic.toFixed(1) + ' dB</td></tr>').join('') + '</table>' : '<p class="muted" style="font-size:.75em">Pojawi się po pierwszej parze "zero".</p>';
+  $('#fit').textContent = lay ? 'zgodność ±' + lay.rms.toFixed(2) + ' m' + (sus.size ? ' · odstające pary: ' + sus.size : '') : '';
+}
+// the map settles like springs: dots glide from where they were to the new fit; new phones drift in from the middle
+let target = null, shown = {}, names = id => id, dotPos = {}, pile = [];
+$('#map').addEventListener('click', e => { // tap dots that lie in one pile: 2, 3 or more; every pair in the pile = distance zero
+  const dpr = devicePixelRatio || 1, px = e.offsetX * dpr, py = e.offsetY * dpr;
+  const hit = Object.entries(dotPos).map(([id, p]) => [id, Math.hypot(p.x - px, p.y - py)]).filter(x => x[1] < 22 * dpr).sort((a, b) => a[1] - b[1])[0];
+  if (!hit) { pile = []; last = ''; return; } // tap empty space = done picking
+  const id = hit[0], i = pile.indexOf(id);
+  if (i >= 0) pile.splice(i, 1); else pile.push(id);
+  for (const k of Object.keys(tape)) if (tape[k] <= 0.05) delete tape[k]; // the pile replaces earlier zero pairs
+  for (let x = 0; x < pile.length; x++) for (let y = x + 1; y < pile.length; y++) tape[[pile[x], pile[y]].sort().join('|')] = 0.05;
+  store('dp_tape', JSON.stringify(tape)); last = '';
+});
+function frame() {
+  if (target) for (const [id, p] of Object.entries(target)) { const q = shown[id] || { x: 0, y: 0 }; shown[id] = { x: q.x + (p.x - q.x) * 0.12, y: q.y + (p.y - q.y) * 0.12 }; }
+  for (const id of Object.keys(shown)) if (!target || !target[id]) delete shown[id];
+  drawMap(target ? { pos: shown } : null, names);
+  requestAnimationFrame(frame);
 }
 function drawMap(lay, nm) {
+  dotPos = {};
   const cv = $('#map'), g = cv.getContext('2d'), dpr = devicePixelRatio || 1;
   cv.width = cv.clientWidth * dpr; cv.height = cv.clientHeight * dpr; g.fillStyle = '#020905'; g.fillRect(0, 0, cv.width, cv.height);
   g.font = (13 * dpr) + 'px ui-monospace, Menlo, monospace';
-  if (!lay) { $('#fit').textContent = ''; g.fillStyle = '#5f9a77';  return; }
-  $('#fit').textContent = 'zgodność ±' + lay.rms.toFixed(2) + ' m';
+  if (!lay || !Object.keys(lay.pos).length) return;
   const pts = Object.entries(lay.pos), xs = pts.map(p => p[1].x), ys = pts.map(p => p[1].y);
   const mx = (Math.min(...xs) + Math.max(...xs)) / 2, my = (Math.min(...ys) + Math.max(...ys)) / 2;
   const ext = Math.max(1, ...pts.map(([, p]) => Math.max(Math.abs(p.x - mx), Math.abs(p.y - my)))) * 1.35, s = Math.min(cv.width, cv.height) / 2 / ext;
   g.strokeStyle = 'rgba(61,255,138,.15)'; for (let r = 1; r <= ext * 1.5; r++) { g.beginPath(); g.arc(cv.width / 2, cv.height / 2, r * s, 0, 7); g.stroke(); }
     for (const [id, p] of pts) {
     const x = cv.width / 2 + (p.x - mx) * s, y = cv.height / 2 - (p.y - my) * s;
+    dotPos[id] = { x, y };
+    const inZero = Object.keys(tape).some(k => tape[k] <= 0.05 && k.split('|').includes(id));
+    if (inZero) { g.strokeStyle = 'rgba(255,194,77,.8)'; g.lineWidth = 2 * dpr; g.beginPath(); g.arc(x, y, 13 * dpr, 0, 7); g.stroke(); g.lineWidth = 1; }
     g.fillStyle = '#3dff8a'; g.beginPath(); g.arc(x, y, 7 * dpr, 0, 7); g.fill();
     const label = nm(id).replace(/&amp;/g, '&'), lw = g.measureText(label).width; // near the right edge: label goes left of the dot
     g.fillStyle = '#d6f5e1'; g.fillText(label, x + 10 * dpr + lw > cv.width ? x - 10 * dpr - lw : x + 10 * dpr, y + 4 * dpr);
   }
 }
-setInterval(poll, 1000); poll();
+setInterval(poll, 1000); poll(); requestAnimationFrame(frame);
 </script>
 </html>

@@ -91,5 +91,21 @@ const seats = [{ x: -3, y: 1 }, { x: 3, y: 1 }, ...audience]; // p0 = stage left
   const lay = R.layout(ids, dists), err = procrustesErr(lay.pos, seats, ids);
   check('real-world flaws: map within 0.4 m', err < 0.4, 'median ' + err.toFixed(3) + ' m, stress rms ' + lay.rms.toFixed(3) + ' m');
 }
+{ // 5. blocked paths: three pairs read 1.5-2.5 m too long (first arrival was a reflection). Robust springs vs plain.
+  const { ids, heard } = rollCall(seats);
+  const dists = R.pairDistances(ids, heard); dists[3].d += 1.5; dists[20].d += 2.0; dists[47].d += 2.5;
+  const plain = procrustesErr(R.layout(ids, dists).pos, seats, ids), rob = R.layout(ids, dists, { robust: true }), robust = procrustesErr(rob.pos, seats, ids);
+  check('blocked paths: robust springs beat plain', robust < plain && robust < 0.15, 'plain ' + plain.toFixed(3) + ' m, robust ' + robust.toFixed(3) + ' m, flagged ' + rob.suspect.length + ' pairs');
+}
+{ // 6. tape calibration: every phone has a 12 cm speaker-mic gap; one taped pair fixes the shared offset
+  const { ids, heard } = rollCall(seats, { selfGap: 0.12 });
+  const raw = R.pairDistances(ids, heard), t = raw[0], truth = Math.hypot(seats[0].x - seats[1].x, seats[0].y - seats[1].y);
+  const fit = R.fitOffsets(raw, { [t.a + '|' + t.b]: truth }), cal = R.pairDistances(ids, heard, { offset: Object.fromEntries(ids.map(i => [i, fit.k[i] ?? fit.shared])) });
+  const errOf = ds => { const e = ds.map(x => { const i = ids.indexOf(x.a), j = ids.indexOf(x.b); return Math.abs(x.d - Math.hypot(seats[i].x - seats[j].x, seats[i].y - seats[j].y)); }).sort((p, q) => p - q); return e[e.length >> 1]; };
+  check('tape calibration removes the speaker-mic bias', errOf(cal) < 0.03 && errOf(cal) < errOf(raw), 'median pair error ' + errOf(raw).toFixed(3) + ' m -> ' + errOf(cal).toFixed(3) + ' m');
+}
+{ // 7. speed of sound from temperature
+  check('sound speed at 20 C is 343.4 m/s', Math.abs(R.soundSpeed(20) - 343.4) < 0.2, R.soundSpeed(20).toFixed(1) + ' m/s');
+}
 console.log(fails ? `${fails} FAILED` : 'ALL PASS');
 process.exit(fails ? 1 : 0);
