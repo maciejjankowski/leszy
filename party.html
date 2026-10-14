@@ -153,7 +153,7 @@ async function setupAudio() {
     const hp = ctx.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = 100;
     an = ctx.createAnalyser(); an.fftSize = 8192; an.smoothingTimeConstant = 0; src.connect(hp); hp.connect(an);
     chirp = Ranging.makeChirp(sr, 8000, 12000);
-    chirpBuf = ctx.createBuffer(1, chirp.n, sr); chirpBuf.getChannelData(0).set(chirp.re.map(v => v * 0.9));
+    chirpBuf = ctx.createBuffer(1, chirp.n, sr); chirpBuf.getChannelData(0).set(chirp.re);
   }
 }
 
@@ -174,12 +174,12 @@ function rollcall(p) { // beep in my slot, then find every beep on my own clock
   if (band[1] > sr / 2 - 500) { band = [8000, 12000]; toast('Ten telefon nie zagra tak wysoko (' + sr + ' Hz); piszczy w paśmie 8-12 kHz', true); } // 44.1 kHz phones cannot do 18 kHz cleanly
   if (!chirp.band || chirp.band[0] !== band[0] || chirp.band[1] !== band[1]) {
     chirp = Ranging.makeChirp(sr, band[0], band[1]); chirp.band = band;
-    chirpBuf = ctx.createBuffer(1, chirp.n, sr); chirpBuf.getChannelData(0).set(chirp.re.map(v => v * 0.9));
+    chirpBuf = ctx.createBuffer(1, chirp.n, sr); chirpBuf.getChannelData(0).set(chirp.re);
   }
   if (k < 0) { say('Dołączyłeś po starcie odliczania: poczekaj na następne.', ''); return; }
   roundBusy = true; // no reload while beeping or listening
   const when = serverToCtx(p.t0 + k * p.slot * 1000);
-  const s = ctx.createBufferSource(); s.buffer = chirpBuf; s.connect(out); s.start(Math.max(when, ctx.currentTime + 0.02));
+  const s = ctx.createBufferSource(), bg = ctx.createGain(); bg.gain.value = p.gain ?? 0.6; s.buffer = chirpBuf; s.connect(bg); bg.connect(out); // beep level comes with the round (weak speakers buzz when driven hard) s.start(Math.max(when, ctx.currentTime + 0.02));
   if (p.walker === id) say('Idziesz: piszczę pierwszy', 'beep', 'ruszaj się spokojnie'); else say((LOCATE ? 'Piszczymy: ' : 'Odliczanie: ') + 'jesteś ' + (k + 1) + ' z ' + n, 'beep', p.walker ? 'odpowiadam idącemu' : 'nie ruszaj telefonu, cisza');
   const doneAt = p.t0 + n * p.slot * 1000 + 900;
   setTimeout(async () => {
