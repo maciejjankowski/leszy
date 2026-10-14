@@ -1,0 +1,200 @@
+<!doctype html>
+<html lang="pl"><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Wielki Leszy - dołącz</title>
+<link rel="stylesheet" href="style.css">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Leszy">
+<link rel="apple-touch-icon" href="icon-192.png">
+<link rel="manifest" href="party-manifest.php">
+<style>
+  #big { text-align: center; padding: 28px 12px; border-radius: 16px; border: 2px solid var(--line); font-size: 1.5em; letter-spacing: .06em; margin-top: 12px; }
+  #big.beep { background: var(--warn); color: #000; border-color: var(--warn); }
+  #big.drone { background: var(--hot); color: #fff; border-color: var(--hot); font-size: 2em; animation: pulse .4s infinite alternate; }
+  #big.ok { border-color: var(--ok); }
+  @keyframes pulse { to { filter: brightness(1.4); } }
+  #sub { text-align: center; margin-top: 10px; }
+  .steps { padding-left: 1.2em; } .steps li { margin: .45em 0; }
+</style>
+<div class="wrap">
+  <h1>WIELKI LESZY · NA ŻYWO</h1>
+  <div id="joinBox" class="card">
+    <p class="muted">Twój telefon raz piśnie, a potem będzie słuchał. Nic nie jest nagrywane ani wysyłane poza kilkoma liczbami.</p>
+    <ol class="steps">
+      <li id="stInstall" data-ios="Opcjonalnie: stuknij Udostępnij, potem Do ekranu początkowego. Pełny ekran, nie gaśnie." data-android="Opcjonalnie: stuknij menu (trzy kropki), potem Zainstaluj aplikację." data-other="Opcjonalnie: zainstaluj tę stronę jako aplikację z menu przeglądarki."></li>
+      <li id="stRinger" data-ios="Dzwonek WŁĄCZONY: boczny przełącznik nie może pokazywać pomarańczowego (tryb cichy wycisza tę stronę)." data-android="Dźwięk WŁĄCZONY: nie wyciszenie, nie wibracje." data-other="Dźwięk włączony."></li>
+      <li>Głośność na maksimum (wciskaj głośniej, aż przestanie rosnąć).</li>
+      <li>Połóż telefon płasko, ekranem do góry, <b>górną krawędzią w stronę prowadzącego</b>. Wszyscy tak samo, wtedy każdy telefon słyszy podobnie.</li>
+      <li>Stuknij <b>Test</b> i zezwól na mikrofon. Powinien rozlec się krótki gwizd.</li>
+    </ol>
+    <div class="row"><button class="big" id="test">Test</button><span id="testRes" class="muted"></span></div>
+    <label style="display:block;margin-top:12px">Twoje imię <input id="name" size="12" maxlength="24"></label>
+    <button class="big" id="go" style="margin-top:12px">Dołącz</button>
+    <p id="err" style="color:var(--hot)"></p>
+  </div>
+  <div id="runBox" hidden>
+    <div id="big">Czekam na odliczanie...</div>
+    <p id="sub" class="muted"></p>
+    <p id="dir" class="muted" style="text-align:center;font-size:1.2em"></p>
+  </div>
+</div>
+<script src="ranging.js"></script>
+<script src="synth.js"></script>
+<script>
+const $ = s => document.querySelector(s);
+const store = (k, v) => { try { if (v === undefined) return localStorage.getItem(k); localStorage.setItem(k, v); } catch (e) {} };
+let id = store('dp_id'); if (!id) { id = 'a' + Math.random().toString(36).slice(2, 8); store('dp_id', id); }
+const qs = new URLSearchParams(location.search), role = (qs.get('role') || '').toUpperCase(); // L / R = stage anchors
+const LOOP = qs.has('loop'); // test mode: no mic, my own output is fed straight into my recorder
+const ROOM = (qs.get('room') || '').replace(/[^a-z0-9]/gi, '').toLowerCase(); // separate room, e.g. the phone check
+$('#name').value = store('dp_name') || '';
+const api = (a, body) => fetch('party.php?a=' + a + (ROOM ? '&room=' + ROOM : '') + (body ? '' : '&id=' + id), body ? { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) } : { cache: 'no-store' }).then(r => r.json());
+
+let ctx, sr, an, out, chirp, chirpBuf, off = 0, chunks = [], lastRound = -1, floor = null, drone = null, droneKey = '', lock;
+const say = (t, cls, sub) => { $('#big').textContent = t; $('#big').className = cls || ''; $('#sub').textContent = sub || ''; };
+
+async function syncClock() { // server ms - local ms, from the fastest of 6 round trips
+  let best = 1e9;
+  for (let i = 0; i < 6; i++) {
+    const t1 = Date.now(), j = await (await fetch('party.php?a=time' + (ROOM ? '&room=' + ROOM : ''), { cache: 'no-store' })).json(), t2 = Date.now();
+    if (t2 - t1 < best) { best = t2 - t1; off = j.t - (t1 + t2) / 2; }
+  }
+}
+const serverToCtx = ms => ctx.currentTime + (ms - (Date.now() + off)) / 1000;
+function readRing(from, len) { // samples [from, from+len) on this phone's own audio clock
+  const x = new Float32Array(len);
+  for (const c of chunks) { const s = Math.max(from, c.frame), e = Math.min(from + len, c.frame + c.data.length); if (s < e) x.set(c.data.subarray(s - c.frame, e - c.frame), s - from); }
+  return x;
+}
+
+// platform-specific setup steps
+const plat = /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1) ? 'ios' : /Android/.test(navigator.userAgent) ? 'android' : 'other';
+for (const li of document.querySelectorAll('[data-ios]')) li.textContent = li.dataset[plat];
+if (matchMedia('(display-mode: standalone)').matches || navigator.standalone) $('#stInstall').textContent = 'Zainstalowane. Super.';
+
+// compass: heading of the phone's top edge (iOS asks permission on a tap; Android gives absolute orientation)
+let heading = null, stageHeading = null, lastPose = 0;
+async function compass() {
+  try { if (window.DeviceOrientationEvent && DeviceOrientationEvent.requestPermission) await DeviceOrientationEvent.requestPermission(); } catch (e) {}
+  const on = e => { const h = e.webkitCompassHeading != null ? e.webkitCompassHeading : (e.absolute && e.alpha != null ? (360 - e.alpha) % 360 : null); if (h != null) heading = h; };
+  addEventListener('deviceorientationabsolute', on); addEventListener('deviceorientation', on);
+}
+function coach() { // tell the user which way to turn so the top edge faces the stage (= where the room points)
+  if (heading == null) { $('#dir').textContent = ''; return; }
+  if (Date.now() - lastPose > 2000) { lastPose = Date.now(); api('pose', { id, heading: Math.round(heading) }).catch(() => {}); }
+  if (stageHeading == null) { $('#dir').textContent = 'Górna krawędź w stronę prowadzącego'; return; }
+  const d = ((heading - stageHeading + 540) % 360) - 180;
+  $('#dir').textContent = Math.abs(d) < 15 ? 'Kierunek dobry ✓' : 'Obróć telefon o ' + Math.round(Math.abs(d)) + '° w ' + (d > 0 ? 'lewo' : 'prawo');
+}
+
+let prepared = null;
+function prepare() { if (!prepared) prepared = setupAudio(); return prepared; }
+
+// Test: play a short whistle and check my own mic heard it = speaker, volume and mic permission in one go
+async function test() {
+  $('#testRes').textContent = 'sprawdzam...'; $('#err').textContent = '';
+  compass();
+  try { await prepare(); } catch (e) { prepared = null; $('#testRes').textContent = ''; $('#err').textContent = 'Mikrofon zablokowany: ' + e.message + '. Zezwól w ustawieniach przeglądarki i odśwież stronę.'; return; }
+  const td = new Float32Array(an.fftSize), rms = () => { an.getFloatTimeDomainData(td); let s = 0; for (const v of td) s += v * v; return Math.sqrt(s / td.length) + 1e-9; };
+  if (ctx.state !== 'running') { $('#testRes').textContent = 'Dźwięk zablokowany: stuknij Test jeszcze raz.'; return; }
+  const before = rms();
+  const o = ctx.createOscillator(), g = ctx.createGain(), t = ctx.currentTime + 0.05;
+  o.frequency.setValueAtTime(2000, t); o.frequency.linearRampToValueAtTime(4000, t + 0.6);
+  g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(0.8, t + 0.03); g.gain.setValueAtTime(0.8, t + 0.55); g.gain.linearRampToValueAtTime(0, t + 0.6);
+  o.connect(g); g.connect(out); o.start(t); o.stop(t + 0.62);
+  await new Promise(r => setTimeout(r, 400));
+  const rise = 20 * Math.log10(rms() / before);
+  const ok = rise > 10;
+  $('#testRes').textContent = ok ? 'Głośnik i mikrofon OK (+' + rise.toFixed(0) + ' dB)' : 'Słabo słychać (+' + rise.toFixed(0) + ' dB): dzwonek włączony? głośność w górę?';
+  $('#testRes').style.color = ok ? 'var(--ok)' : 'var(--warn)';
+}
+
+async function start() {
+  const name = $('#name').value.trim(); store('dp_name', name);
+  if (heading == null) compass();
+  try {
+    await prepare();
+    await syncClock();
+    await api('join', { id, name: name || id, role });
+  } catch (e) { prepared = null; $('#err').textContent = 'Nie udało się uruchomić: ' + e.message + (isSecureContext ? '' : ' (wymaga https)'); return; }
+  try { lock = await navigator.wakeLock.request('screen'); } catch (e) {}
+  $('#joinBox').hidden = true; $('#runBox').hidden = false;
+  say(role ? 'SCENA ' + (role === 'L' ? 'LEWA' : 'PRAWA') : 'Jesteś w grze. Czekam na odliczanie...', 'ok', name);
+  setInterval(poll, 1000); setInterval(listen, 250); setInterval(coach, 500);
+}
+
+async function setupAudio() {
+  {
+    ctx = new (window.AudioContext || window.webkitAudioContext)({ latencyHint: 'interactive' }); sr = ctx.sampleRate;
+    await Promise.race([ctx.resume(), new Promise(r => setTimeout(r, 1000))]); // never hang if the browser withholds audio
+    try { if (navigator.audioSession) navigator.audioSession.type = 'play-and-record'; } catch (e) {}
+    out = ctx.createGain(); out.connect(ctx.destination); // everything I play goes through here
+    let src;
+    if (LOOP) { src = ctx.createGain(); out.connect(src); }
+    else src = ctx.createMediaStreamSource(await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false } }));
+    await ctx.audioWorklet.addModule('tap-worklet.js');
+    const tap = new AudioWorkletNode(ctx, 'tap'), mute = ctx.createGain(); mute.gain.value = 0;
+    tap.port.onmessage = e => { chunks.push({ frame: e.data.frame, data: e.data.data[0] }); while (chunks.length && chunks[0].frame < e.data.frame - 40 * sr) chunks.shift(); };
+    src.connect(tap); tap.connect(mute); mute.connect(ctx.destination); // keep the tap pulled
+    const hp = ctx.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = 100;
+    an = ctx.createAnalyser(); an.fftSize = 8192; an.smoothingTimeConstant = 0; src.connect(hp); hp.connect(an);
+    chirp = Ranging.makeChirp(sr, 8000, 12000);
+    chirpBuf = ctx.createBuffer(1, chirp.n, sr); chirpBuf.getChannelData(0).set(chirp.re.map(v => v * 0.9));
+  }
+}
+
+async function poll() {
+  let j; try { j = await api('state'); } catch (e) { return; }
+  stageHeading = j.stage;
+  const p = j.party;
+  if (p.phase === 'rollcall' && p.round !== lastRound) rollcall(p);
+  const key = p.phase === 'drones' ? JSON.stringify(p.drones) : '';
+  if (key !== droneKey) { droneKey = key; droneMode(p); }
+}
+
+function rollcall(p) { // beep in my slot, then find every beep on my own clock
+  lastRound = p.round;
+  const k = p.order.indexOf(id), n = p.order.length;
+  if (k < 0) { say('Dołączyłeś po starcie odliczania: poczekaj na następne.', ''); return; }
+  const when = serverToCtx(p.t0 + k * p.slot * 1000);
+  const s = ctx.createBufferSource(); s.buffer = chirpBuf; s.connect(out); s.start(Math.max(when, ctx.currentTime + 0.02));
+  say('Odliczanie: jesteś ' + (k + 1) + ' z ' + n, 'beep', 'nie ruszaj telefonu, cisza');
+  const doneAt = p.t0 + n * p.slot * 1000 + 900;
+  setTimeout(async () => {
+    const heard = {}, snr = {};
+    p.order.forEach((src, j) => {
+      const ws = serverToCtx(p.t0 + j * p.slot * 1000) - 0.12, from = Math.round(ws * sr);
+      const r = Ranging.detectFirst(readRing(from, Math.round(0.45 * sr)), chirp);
+      if (r) snr[src] = Math.round(r.snr);
+      if (r && r.snr > 8) heard[src] = (from + r.sample) / sr;
+    });
+    await api('heard', { id, round: p.round, heard, snr });
+    say('Na mapie. Usłyszałem ' + Object.keys(heard).length + ' z ' + n + ' pisków.', 'ok', 'teraz nasłuchuję dronów');
+  }, Math.max(0, doneAt - (Date.now() + off)));
+}
+
+function droneMode(p) {
+  if (drone) { drone.stop(); drone = null; }
+  const me = (p.drones || []).find(d => d.id === id);
+  if (me) { drone = makeDrone(ctx, me.f0); drone.output.connect(out); drone.setGain(0.9); say('JESTEŚ DRONEM', 'drone', 'podnieś telefon, nie zasłaniaj głośnika'); }
+  else if (p.phase === 'drones') say('Nasłuchuję dronów...', 'ok', 'w powietrzu: ' + (p.drones || []).length);
+  else if (lastRound >= 0) say('Na mapie. Nasłuchuję.', 'ok', '');
+}
+
+let lastSent = 0;
+function listen() { // learn the room while nothing flies; while drones fly, report each drone's level
+  if (!an) return;
+  const db = new Float32Array(an.frequencyBinCount); an.getFloatFrequencyData(db);
+  for (let i = 0; i < db.length; i++) if (!isFinite(db[i])) db[i] = -140;
+  const flying = droneKey !== '';
+  if (!floor) floor = Float32Array.from(db);
+  else if (!flying) for (let i = 0; i < db.length; i++) floor[i] += (db[i] - floor[i]) * 0.08;
+  if (!flying || drone || Date.now() - lastSent < 500) return;
+  lastSent = Date.now();
+  const levels = {}, binHz = sr / an.fftSize;
+  for (const d of JSON.parse(droneKey)) levels[d.id] = +Ranging.combLevel(db, floor, binHz, d.f0).toFixed(1);
+  api('levels', { id, levels }).catch(() => {});
+}
+$('#go').onclick = start; $('#test').onclick = test;
+document.addEventListener('visibilitychange', () => { if (!document.hidden && ctx) ctx.resume(); });
+</script>
+</html>

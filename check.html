@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="pl"><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Wielki Leszy - baza</title>
+<link rel="stylesheet" href="style.css">
+<style>
+  #qrBox { text-align: center; }
+  #qr { background: #fff; padding: 10px; border-radius: 12px; display: inline-block; }
+  #count { font-size: 2.2em; text-align: center; margin: .2em 0 0; }
+  #go { width: 100%; }
+  #map { width: 100%; aspect-ratio: 1; max-height: 70vh; background: #020905; border-radius: 12px; display: block; }
+  details { margin-top: 10px; } summary { cursor: pointer; color: var(--dim); padding: 6px 0; }
+  .grid { overflow-x: auto; }
+  table { border-collapse: collapse; font-size: .8em; }
+  th, td { border: 1px solid var(--line); padding: 4px 6px; text-align: center; white-space: nowrap; }
+  td.ok { color: var(--ok); } td.bad { color: var(--hot); } td.self { color: var(--dim); }
+  input.tape { width: 4.5em; padding: .2em; }
+</style>
+<div class="wrap">
+  <h1>WIELKI LESZY · BAZA</h1>
+  <div class="card" id="qrBox">
+    <p>Zeskanuj kod, stuknij <b>Test</b>, potem <b>Dołącz</b>.</p>
+    <div id="qr"></div>
+    <p class="muted" id="url" style="word-break:break-all;font-size:.75em"></p>
+    <div id="count">0</div><p class="muted" style="text-align:center;margin:0">telefonów w grze</p>
+  </div>
+  <div class="card">
+    <button class="big" id="go">Start: telefony piszczą po kolei</button>
+    <p class="muted" id="status" style="text-align:center"></p>
+  </div>
+  <div class="card">
+    <canvas id="map"></canvas>
+    <p class="muted" id="fit"></p>
+    <details><summary>Kto kogo usłyszał</summary><p class="muted">Wiersz = słuchający, kolumna = piszczący. Liczba = wyrazistość sygnału; poniżej 8 = nie usłyszał.</p><div class="grid" id="matrix"></div></details>
+    <details><summary>Odległości (z taśmą: wpisz zmierzoną)</summary><div class="grid" id="pairs"></div></details>
+    <p class="row" style="margin-top:12px"><button id="reset">Nowa runda od zera</button></p>
+  </div>
+</div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<script src="ranging.js"></script>
+<script>
+const $ = s => document.querySelector(s), ROOM = 'test';
+const hub = (a, body) => fetch('party.php?a=' + a + '&room=' + ROOM, body ? { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) } : { cache: 'no-store' }).then(r => r.json());
+const joinUrl = location.href.replace(/check\.html.*$/, 'party.html') + '?room=' + ROOM;
+(async () => { // the QR carries this demo's join PIN when the gate allows it, so guests type nothing
+  let pin = ''; try { pin = (await (await fetch('pin.php?qrinfo=1', { cache: 'no-store' })).json()).pin || ''; } catch (e) {}
+  const u = joinUrl + (pin ? '&pin=' + pin : '');
+  $('#url').textContent = u;
+  const w = Math.min(260, innerWidth - 80);
+  try { new QRCode($('#qr'), { text: u, width: w, height: w }); } catch (e) {}
+})();
+$('#go').onclick = () => hub('admin', { cmd: 'rollcall' }).then(j => {
+  const n = j.party.order.length;
+  $('#status').textContent = n < 2 ? 'Za mało telefonów: potrzeba co najmniej 3.' : 'Piszczy ' + n + ' telefonów, około ' + Math.round(n * 0.5 + 5) + ' s. Cisza na sali!';
+});
+$('#reset').onclick = () => { hub('admin', { cmd: 'reset' }); last = ''; };
+const tape = {};
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+
+let last = '';
+async function poll() {
+  let d; try { d = await hub('data'); } catch (e) { $('#status').textContent = 'Brak połączenia z bazą'; return; }
+  const live = d.members.filter(m => m.age < 20), p = d.party;
+  $('#count').textContent = live.length;
+  const done = d.members.filter(m => m.round === p.round && m.heard);
+  if (p.phase === 'rollcall' && p.round) $('#status').textContent = done.length < p.order.length ? 'Zbieram wyniki: ' + done.length + ' z ' + p.order.length : 'Gotowe: ' + done.length + ' telefonów na mapie.';
+  const key = JSON.stringify(done.map(m => [m.id, m.round, m.heard])) + JSON.stringify(tape);
+  if (key === last) return; last = key;
+  const ids = (p.order || []).filter(id => d.members.some(m => m.id === id)), by = Object.fromEntries(d.members.map(m => [m.id, m]));
+  const nm = id => esc((by[id] && by[id].name) || id);
+  let h = '<table><tr><th></th>' + ids.map(c => '<th>' + nm(c) + '</th>').join('') + '</tr>';
+  for (const r of ids) h += '<tr><th>' + nm(r) + '</th>' + ids.map(c => {
+    const m = by[r], s = m && m.snr ? m.snr[c] : null, heard = m && m.heard && Number.isFinite(m.heard[c]);
+    if (!m || m.round !== p.round) return '<td class="self">...</td>';
+    return '<td class="' + (r === c ? 'self' : heard ? 'ok' : 'bad') + '">' + (s == null ? '-' : s) + (heard ? '' : ' x') + '</td>';
+  }).join('') + '</tr>';
+  $('#matrix').innerHTML = ids.length ? h + '</table>' : '<p class="muted">Jeszcze nie było rundy.</p>';
+  const heard = Object.fromEntries(done.map(m => [m.id, m.heard])), dists = Ranging.pairDistances(done.map(m => m.id), heard);
+  $('#pairs').innerHTML = dists.length ? '<table><tr><th>para</th><th>z pisków (m)</th><th>taśma (m)</th><th>błąd</th></tr>' + dists.map(x => {
+    const k = x.a + '|' + x.b, t = tape[k], err = t ? x.d - t : null;
+    return '<tr><td>' + nm(x.a) + ' - ' + nm(x.b) + '</td><td>' + x.d.toFixed(2) + '</td><td><input class="tape" data-k="' + k + '" inputmode="decimal" value="' + (t || '') + '"></td><td>' + (err == null ? '' : (err >= 0 ? '+' : '') + err.toFixed(2)) + '</td></tr>';
+  }).join('') + '</table>' : '<p class="muted">Potrzeba co najmniej 2 telefonów, które się usłyszały.</p>';
+  document.querySelectorAll('input.tape').forEach(i => i.onchange = () => { const v = parseFloat(i.value.replace(',', '.')); if (v > 0) tape[i.dataset.k] = v; else delete tape[i.dataset.k]; });
+  const used = done.map(m => m.id).filter(i => dists.some(x => x.a === i || x.b === i));
+  drawMap(used.length >= 3 ? Ranging.layout(used, dists, 200) : null, nm);
+}
+function drawMap(lay, nm) {
+  const cv = $('#map'), g = cv.getContext('2d'), dpr = devicePixelRatio || 1;
+  cv.width = cv.clientWidth * dpr; cv.height = cv.clientHeight * dpr; g.fillStyle = '#020905'; g.fillRect(0, 0, cv.width, cv.height);
+  g.font = (13 * dpr) + 'px ui-monospace, Menlo, monospace';
+  if (!lay) { $('#fit').textContent = ''; g.fillStyle = '#5f9a77'; g.fillText('Tu pojawi się mapa (min. 3 telefony)', 14 * dpr, cv.height / 2); return; }
+  $('#fit').textContent = 'Zgodność: mapa różni się od zmierzonych odległości średnio o ' + lay.rms.toFixed(2) + ' m (im mniej, tym lepiej). Obrót i lustrzane odbicie są tu dowolne.';
+  const pts = Object.entries(lay.pos), xs = pts.map(p => p[1].x), ys = pts.map(p => p[1].y);
+  const mx = (Math.min(...xs) + Math.max(...xs)) / 2, my = (Math.min(...ys) + Math.max(...ys)) / 2;
+  const ext = Math.max(1, ...pts.map(([, p]) => Math.max(Math.abs(p.x - mx), Math.abs(p.y - my)))) * 1.35, s = Math.min(cv.width, cv.height) / 2 / ext;
+  g.strokeStyle = 'rgba(61,255,138,.15)'; for (let r = 1; r <= ext * 1.5; r++) { g.beginPath(); g.arc(cv.width / 2, cv.height / 2, r * s, 0, 7); g.stroke(); }
+  g.fillStyle = 'rgba(61,255,138,.5)'; g.fillText('1 m', cv.width / 2 + 4 * dpr, cv.height / 2 - s - 4 * dpr);
+  for (const [id, p] of pts) {
+    const x = cv.width / 2 + (p.x - mx) * s, y = cv.height / 2 - (p.y - my) * s;
+    g.fillStyle = '#3dff8a'; g.beginPath(); g.arc(x, y, 7 * dpr, 0, 7); g.fill();
+    g.fillStyle = '#d6f5e1'; g.fillText(nm(id).replace(/&amp;/g, '&'), x + 10 * dpr, y + 4 * dpr);
+  }
+}
+setInterval(poll, 1000); poll();
+</script>
+</html>

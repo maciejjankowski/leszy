@@ -1,0 +1,158 @@
+<!doctype html>
+<html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Wielki Leszy - sensor</title>
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon-192.png">
+<link rel="stylesheet" href="style.css">
+<style>
+  #status { text-align: center; padding: 22px 10px; border-radius: 14px; border: 2px solid var(--line); font-size: 1.6em; letter-spacing: .1em; transition: background .15s; }
+  #status.det { background: var(--hot); color: #fff; border-color: var(--hot); animation: pulse .5s infinite alternate; }
+  #status.warm { border-color: var(--warn); color: var(--warn); }
+  @keyframes pulse { to { filter: brightness(1.35); } }
+  .stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; text-align: center; margin-top: 10px; }
+  .stats b { display: block; font-size: 1.4em; }
+  #bar { height: 10px; background: var(--line); border-radius: 5px; overflow: hidden; margin-top: 10px; }
+  #bar i { display: block; height: 100%; width: 0; background: var(--ok); transition: width .1s; }
+  canvas { width: 100%; height: 150px; display: block; background: #020905; border-radius: 10px; }
+</style>
+<div class="wrap">
+  <h1>WIELKI LESZY · SENSOR</h1>
+  <div class="card row">
+    <label>Name <input id="name" size="10" maxlength="24"></label>
+    <span class="muted" id="who"></span>
+  </div>
+  <div id="start" class="card">
+    <button class="big" id="go">Start listening</button>
+    <p class="muted">Keep this screen on and the phone lying still, screen up. The first 2 s it learns the room's normal sound - stay quiet.</p>
+    <p id="err" style="color:var(--hot)"></p>
+    <label class="muted"><input type="checkbox" id="selftest"> Self-test: feed a fake drone instead of the microphone</label>
+  </div>
+  <div id="run" hidden>
+    <div id="status">-</div>
+    <div id="bar"><i></i></div>
+    <div class="stats">
+      <div><b id="f0">-</b><span class="muted">rotor Hz</span></div>
+      <div><b id="lvl">-</b><span class="muted">level dB</span></div>
+      <div><b id="net">-</b><span class="muted">hub</span></div>
+    </div>
+    <div class="card" id="st" hidden>
+      <div class="row"><span class="muted">fake drone f0</span><input type="range" id="sf" min="120" max="900" value="320"><span id="sfv">320</span></div>
+      <div class="row"><span class="muted">distance</span><input type="range" id="sg" min="0" max="100" value="60"></div>
+    </div>
+    <canvas id="spec"></canvas>
+    <p class="muted" id="place"></p>
+    <div class="row"><button id="stop">Stop</button><a href="./">home</a></div>
+  </div>
+</div>
+<script src="detector.js"></script>
+<script src="synth.js"></script>
+<script>
+const $ = s => document.querySelector(s);
+const store = (k, v) => { try { if (v === undefined) return localStorage.getItem(k); localStorage.setItem(k, v); } catch (e) {} };
+let id = store('de_id'); if (!id) { id = 'n' + Math.random().toString(36).slice(2, 8); store('de_id', id); }
+$('#name').value = store('de_name') || ('phone-' + id.slice(1, 4));
+$('#name').onchange = () => store('de_name', $('#name').value.trim());
+$('#who').textContent = 'id ' + id;
+
+let ctx, stream, an, det, extras = [], timer, sendTimer, fakeTimer, lock, fake, last = null, sending = false, okCount = 0, failCount = 0;
+
+async function start() {
+  if (ctx && ctx.state !== 'closed') return;
+  last = null; $('#err').textContent = ''; $('#st').hidden = true;
+  ctx = new (window.AudioContext || window.webkitAudioContext)();
+  await ctx.resume();
+  const hp = ctx.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = 100; // cut room hum and handling thumps
+  an = ctx.createAnalyser(); an.fftSize = 8192; an.smoothingTimeConstant = 0;
+  if ($('#selftest').checked) {
+    fake = makeDrone(ctx, +$('#sf').value); fake.output.connect(hp);
+    $('#st').hidden = false; fake.setGain(0);
+    fakeTimer = setTimeout(setFake, 3000); // let the detector learn a quiet room first, then the fake drone arrives
+  } else {
+    try {
+      // ask for every channel the input has: a DJI receiver in split mode gives one channel per transmitter
+      stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false, channelCount: { ideal: 8 } } });
+    } catch (e) { await ctx.close(); $('#err').textContent = 'Microphone blocked: ' + e.message + (isSecureContext ? '' : ' - this page needs https'); return; }
+    const src = ctx.createMediaStreamSource(stream), track = stream.getAudioTracks ? stream.getAudioTracks()[0] : null, nch = (track && track.getSettings && track.getSettings().channelCount) || 1;
+    if (nch > 1) { // each extra channel = its own sensor (same clock, separate detector)
+      const split = ctx.createChannelSplitter(nch); src.connect(split); split.connect(hp, 0);
+      for (let k = 1; k < nch; k++) {
+        const h = ctx.createBiquadFilter(); h.type = 'highpass'; h.frequency.value = 100;
+        const a = ctx.createAnalyser(); a.fftSize = 8192; a.smoothingTimeConstant = 0; split.connect(h, k); h.connect(a);
+        extras.push({ k, an: a, det: new CombDetector({ binHz: ctx.sampleRate / a.fftSize }), last: null, buf: new Float32Array(a.frequencyBinCount) });
+      }
+      $('#who').textContent = 'id ' + id + ' · ' + nch + ' mic channels';
+    } else src.connect(hp);
+  }
+  hp.connect(an);
+  det = new CombDetector({ binHz: ctx.sampleRate / an.fftSize });
+  const buf = new Float32Array(an.frequencyBinCount);
+  timer = setInterval(() => {
+    if (ctx.state !== 'running' || document.hidden) { last = null; showPaused(); return; } // screen lock, call, Siri: say so, send nothing
+    an.getFloatFrequencyData(buf);
+    last = det.process(buf, ctx.currentTime);
+    for (const x of extras) { x.an.getFloatFrequencyData(x.buf); x.last = x.det.process(x.buf, ctx.currentTime); }
+    show(last, buf);
+  }, 60);
+  sendTimer = setInterval(send, 200);
+  try { lock = await navigator.wakeLock.request('screen'); } catch (e) {}
+  $('#start').hidden = true; $('#run').hidden = false;
+}
+function showPaused() { const s = $('#status'); s.className = 'warm'; s.textContent = 'PAUSED - tap to resume'; }
+document.addEventListener('visibilitychange', async () => { // back after a screen lock or app switch
+  if (document.hidden || !ctx || ctx.state === 'closed') return;
+  try { await ctx.resume(); } catch (e) {}
+  try { lock = await navigator.wakeLock.request('screen'); } catch (e) {}
+});
+$('#status').addEventListener('click', () => { if (ctx && ctx.state !== 'closed') ctx.resume(); });
+function stop() {
+  clearInterval(timer); clearInterval(sendTimer); clearTimeout(fakeTimer); last = null; extras = [];
+  if (fake) fake.stop(); fake = null;
+  if (stream) stream.getTracks().forEach(t => t.stop());
+  if (ctx) ctx.close(); if (lock) lock.release().catch(() => {});
+  $('#start').hidden = false; $('#run').hidden = true;
+}
+function setFake() {
+  if (!fake) return;
+  fake.setF0(+$('#sf').value); $('#sfv').textContent = $('#sf').value;
+  const d = 1 + (+$('#sg').value) / 10; fake.setGain(0.8 / d); // amplitude 1/d, power 1/d^2
+}
+$('#sf').oninput = $('#sg').oninput = setFake;
+
+async function send() {
+  if (!last || sending) return;
+  sending = true;
+  try {
+    const r = await fetch('api.php?a=report', { method: 'POST', signal: AbortSignal.timeout ? AbortSignal.timeout(1500) : undefined, headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id, name: $('#name').value.trim() || id, det: last.detected, score: +last.score.toFixed(2),
+        f0: last.f0, level: +last.level.toFixed(2), warming: last.warming }) });
+    const j = await r.json(); okCount++; failCount = 0;
+    for (const x of extras) if (x.last) fetch('api.php?a=report', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: id + '-' + x.k, name: ($('#name').value.trim() || id) + ' ch' + (x.k + 1), det: x.last.detected, score: +x.last.score.toFixed(2),
+        f0: x.last.f0, level: +x.last.level.toFixed(2), warming: x.last.warming }) }).catch(() => {});
+    $('#place').textContent = j.placed ? 'Placed on the radar. Gain offset ' + j.gain.toFixed(1) + ' dB.' : 'Not placed yet: drag this phone (' + ($('#name').value || id) + ') to its spot on the radar.';
+  } catch (e) { failCount++; }
+  finally { sending = false; } // a hung request times out instead of blocking every later report
+  $('#net').textContent = failCount > 2 ? 'down' : 'ok';
+  $('#net').style.color = failCount > 2 ? 'var(--hot)' : '';
+}
+
+const cv = $('#spec'), g = cv.getContext('2d');
+function show(o, buf) {
+  const s = $('#status');
+  s.className = o.detected ? 'det' : o.warming ? 'warm' : '';
+  s.textContent = o.detected ? 'DRONE' : o.warming ? 'LEARNING ROOM' : 'LISTENING';
+  $('#bar i').style.width = Math.max(0, Math.min(100, o.score / det.threshold * 50)) + '%';
+  $('#f0').textContent = o.detected ? Math.round(o.f0) : '-';
+  $('#lvl').textContent = o.level > -139 ? o.level.toFixed(0) : '-';
+  // spectrum 0-4 kHz, floor in dim, comb teeth when detected
+  const W = cv.width = cv.clientWidth * devicePixelRatio, H = cv.height = cv.clientHeight * devicePixelRatio, bin = det.binHz, n = Math.floor(4000 / bin);
+  const y = v => H - (Math.max(-130, Math.min(-20, v)) + 130) / 110 * H;
+  g.strokeStyle = '#1d4a30'; g.beginPath(); for (let i = 1; i < n; i++) g.lineTo(i / n * W, y(det.floor[i])); g.stroke();
+  g.strokeStyle = '#3dff8a'; g.beginPath(); for (let i = 1; i < n; i++) g.lineTo(i / n * W, y(buf[i])); g.stroke();
+  if (o.detected) { g.strokeStyle = 'rgba(255,77,94,.7)'; for (const f of o.teeth) { const x = f / 4000 * W; g.beginPath(); g.moveTo(x, 0); g.lineTo(x, H); g.stroke(); } }
+}
+$('#go').onclick = start; $('#stop').onclick = stop;
+if ('serviceWorker' in navigator && isSecureContext) navigator.serviceWorker.register('sw.js').catch(() => {});
+</script>

@@ -1,0 +1,13 @@
+:root { --bg: #04100a; --panel: #0a1d13; --line: #1d4a30; --fg: #b7f5cf; --dim: #5f9a77; --hot: #ff4d5e; --warn: #ffc24d; --ok: #3dff8a; color-scheme: dark; }
+* { box-sizing: border-box; }
+html, body { margin: 0; background: var(--bg); color: var(--fg); font: 15px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace; -webkit-text-size-adjust: 100%; }
+a { color: var(--ok); }
+button, input, select { font: inherit; color: var(--fg); background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: .55em .9em; }
+button { cursor: pointer; }
+button.big { font-size: 1.2em; padding: .9em 1.4em; border-color: var(--ok); }
+button.on { background: var(--ok); color: #021; }
+.wrap { padding: max(16px, env(safe-area-inset-top)) 16px max(16px, env(safe-area-inset-bottom)); max-width: 640px; margin: 0 auto; }
+.row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.muted { color: var(--dim); font-size: .85em; }
+.card { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 12px; margin: 12px 0; }
+h1 { font-size: 1.3em; margin: .2em 0 .6em; letter-spacing: .08em; }

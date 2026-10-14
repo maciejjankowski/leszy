@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="pl"><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Wielki Leszy - udawany dron</title>
+<link rel="stylesheet" href="style.css">
+<div class="wrap">
+  <h1>UDAWANY DRON</h1>
+  <p class="muted">Nie masz drona? Odtwórz z tego telefonu syntetyczny dźwięk wirnika i chodź z nim po sali. Głośniki telefonów słabo grają poniżej ~250 Hz, więc trzymaj f0 powyżej. Głośnik Bluetooth da większy zasięg.</p>
+  <div class="card">
+    <button class="big" id="go">Graj</button>
+    <div class="row" style="margin-top:12px"><span class="muted">f0 wirnika</span><input type="range" id="f" min="150" max="900" value="320"><b id="fv">320 Hz</b></div>
+    <div class="row"><span class="muted">głośność</span><input type="range" id="v" min="0" max="100" value="80"></div>
+  </div>
+  <a href="./">start</a>
+</div>
+<script src="synth.js"></script>
+<script>
+const $ = s => document.querySelector(s);
+let ctx, d;
+$('#go').onclick = async () => {
+  if (d) { d.stop(); d = null; $('#go').textContent = 'Graj'; $('#go').classList.remove('on'); return; }
+  ctx = ctx || new (window.AudioContext || window.webkitAudioContext)(); await ctx.resume();
+  d = makeDrone(ctx, +$('#f').value); d.output.connect(ctx.destination); upd();
+  $('#go').textContent = 'Stop'; $('#go').classList.add('on');
+  try { await navigator.wakeLock.request('screen'); } catch (e) {}
+};
+function upd() { $('#fv').textContent = $('#f').value + ' Hz'; if (d) { d.setF0(+$('#f').value); d.setGain(+$('#v').value / 100); } }
+$('#f').oninput = $('#v').oninput = upd;
+</script>

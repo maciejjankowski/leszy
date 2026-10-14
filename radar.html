@@ -1,0 +1,242 @@
+<!doctype html>
+<html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Wielki Leszy - radar</title>
+<link rel="stylesheet" href="style.css">
+<style>
+  body { overflow: hidden; }
+  .layout { display: grid; grid-template-columns: 1fr 320px; height: 100vh; height: 100dvh; }
+  #cv { width: 100%; height: 100%; display: block; touch-action: none; }
+  aside { background: var(--panel); border-left: 1px solid var(--line); padding: 14px; overflow-y: auto; }
+  @media (max-width: 760px) { body { overflow: auto; } .layout { grid-template-columns: 1fr; height: auto; } #cv { height: 100vw; } aside { border-left: 0; border-top: 1px solid var(--line); } }
+  #banner { font-size: 1.25em; letter-spacing: .08em; padding: 10px; border-radius: 10px; text-align: center; border: 1px solid var(--line); }
+  #banner.det { background: var(--hot); color: #fff; border-color: var(--hot); }
+  #banner.fix { background: var(--hot); color: #fff; border-color: var(--hot); animation: pulse .6s infinite alternate; }
+  @keyframes pulse { to { filter: brightness(1.3); } }
+  dl { display: grid; grid-template-columns: auto 1fr; gap: 4px 12px; margin: 12px 0; }
+  dt { color: var(--dim); } dd { margin: 0; text-align: right; font-weight: bold; }
+  table { width: 100%; border-collapse: collapse; font-size: .85em; }
+  td { padding: 3px 4px; border-bottom: 1px solid var(--line); } td.r { text-align: right; }
+  tr.det td { color: var(--hot); } tr.stale td { opacity: .4; }
+  input[type=number] { width: 4.2em; padding: .3em; }
+  details { margin-top: 10px; } summary { cursor: pointer; color: var(--dim); }
+  .tools button { padding: .4em .7em; font-size: .85em; }
+</style>
+<div class="layout">
+  <canvas id="cv"></canvas>
+  <aside>
+    <h1>WIELKI LESZY · RADAR</h1>
+    <div id="banner">-</div>
+    <dl>
+      <dt>position</dt><dd id="pos">-</dd>
+      <dt>speed</dt><dd id="spd">-</dd>
+      <dt>heading</dt><dd id="hdg">-</dd>
+      <dt>rotor f0</dt><dd id="rf">-</dd>
+      <dt>fix quality</dt><dd id="q">-</dd>
+    </dl>
+    <table id="nodes"></table>
+    <div class="row tools" style="margin-top:12px">
+      <button id="sim">SIM off</button>
+      <button id="auto">Auto-place</button>
+      <button id="cal">Calibrate</button>
+    </div>
+    <details>
+      <summary>room and setup</summary>
+      <p class="row muted">room <input type="number" id="rw" step="0.5"> x <input type="number" id="rh" step="0.5"> m</p>
+      <p class="muted">Auto-place puts phones (by name order) on the 4 corners + centre, origin in the middle, "up" = front wall. Drag any phone on the radar to fix its spot.</p>
+      <p class="muted">Calibrate: put all phones together in a pile, play the fake drone 1 m away, press Calibrate. It evens out microphone differences. Then put them back.</p>
+      <div class="row tools"><a href="api.php?a=export">export CSV</a><button id="reset">Reset hub</button></div>
+    </details>
+    <p class="muted">Phones: open <b id="url"></b> &rarr; Sensor.</p>
+  </aside>
+</div>
+<script src="fusion.js"></script>
+<script>
+const $ = s => document.querySelector(s);
+const store = (k, v) => { try { if (v === undefined) return localStorage.getItem(k); localStorage.setItem(k, v); } catch (e) {} };
+$('#rw').value = store('de_rw') || 4; $('#rh').value = store('de_rh') || 3; // a 2-3 m ring beats room corners: reverb flattens levels far from a phone
+$('#rw').onchange = $('#rh').onchange = () => { store('de_rw', $('#rw').value); store('de_rh', $('#rh').value); };
+$('#url').textContent = location.href.replace(/radar\.html.*$/, '');
+const post = (a, body) => fetch('api.php?a=' + a, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+
+let nodes = [], loudest = null, sim = null, fix = null, track = null, consensusF0 = 0, nDet = 0, polling = false, mode = 0;
+const tracker = new Fusion.Tracker(1);
+
+// ---------- data: live hub or simulator
+async function poll() {
+  if (sim || polling) return;
+  polling = true;
+  const generation = mode, controller = new AbortController(), timeout = setTimeout(() => controller.abort(), 2000);
+  try {
+    const r = await fetch('api.php?a=state', { cache: 'no-store', signal: controller.signal });
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    const j = await r.json();
+    if (generation !== mode) return;
+    nodes = keepDrag(j.nodes); fuse(performance.now() / 1000);
+  } catch (e) {
+    if (generation !== mode) return;
+    fix = track = null; tracker.reset(); nDet = 0; panel([]);
+    $('#banner').className = ''; $('#banner').textContent = 'HUB UNREACHABLE';
+  } finally { clearTimeout(timeout); polling = false; }
+}
+setInterval(poll, 250);
+
+function simStep() {
+  const t = performance.now() / 1000, W = +$('#rw').value, H = +$('#rh').value;
+  // drone flies a slow figure-eight inside the room, with a pause every 20 s
+  const ph = t * 0.18, on = (t % 20) < 16;
+  const drone = { x: Math.sin(ph) * W * 0.35, y: Math.sin(2 * ph) * H * 0.3 };
+  const heard = Fusion.simulateLevels(sim.layout, drone, on ? 62 : -60, 1.5);
+  nodes = heard.map((n, i) => ({ id: 's' + i, name: 'sim-' + (i + 1), x: n.x, y: n.y, placed: 1, gain: 0, warming: 0, age: 0.1,
+    det: on && n.level > 35 ? 1 : 0, score: on ? 40 : 5, f0: 320 * (1 + 0.002 * Math.sin(t)), level: n.level }));
+  nodes = keepDrag(nodes);
+  sim.truth = on ? drone : null;
+  fuse(t);
+}
+
+// ---------- fusion
+function fuse(t) {
+  const fresh = nodes.filter(n => n.age < 2.5 && !n.warming);
+  const dets = fresh.filter(n => n.det);
+  nDet = dets.length;
+  if (dets.length) {
+    const fs = dets.map(n => n.f0).sort((a, b) => a - b); consensusF0 = fs[fs.length >> 1];
+    // every placed phone hearing the same rotor (f0 within 5%) contributes its level, alarmed or not
+    // only readings under 1.2 s old feed the fix, so a repeated old report is not a new measurement
+    const use = fresh.filter(n => n.placed && n.x !== null && n.f0 && Math.abs(n.f0 - consensusF0) / consensusF0 < 0.05)
+      .filter(n => n.age < 1.2)
+      .map(n => ({ x: n.x, y: n.y, level: n.level + n.gain }));
+    loudest = fresh.filter(n => n.placed && n.x !== null && n.det).sort((a, b) => (b.level + b.gain) - (a.level + a.gain))[0] || null; // zone fallback
+    fix = Fusion.localize(use);
+    track = fix ? tracker.update(t, fix) : track;
+  } else { fix = null; loudest = null; }
+  if (track && t - track.t > 3) { track = null; tracker.reset(); }
+  panel(fresh);
+}
+
+const compass = h => ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'][Math.round(h / 45) % 8];
+function panel(fresh) {
+  const b = $('#banner');
+  if (fix && track) { b.className = 'fix'; b.textContent = 'DRONE · TRACKING'; }
+  else if (nDet) { b.className = 'det'; b.textContent = `DRONE HEARD · ${nDet} phone${nDet > 1 ? 's' : ''}` + (nDet < 3 ? ' · need 3 for a fix' : ''); }
+  else { b.className = ''; b.textContent = fresh.length ? `CLEAR · ${fresh.length} phone${fresh.length > 1 ? 's' : ''} listening` : nodes.length ? `${nodes.length} PHONE${nodes.length > 1 ? 'S' : ''} SILENT · screen locked?` : 'NO PHONES'; }
+  const live = track && fix;
+  $('#pos').textContent = live ? `${track.x.toFixed(1)}, ${track.y.toFixed(1)} m` : '-';
+  $('#spd').textContent = live ? `${track.speed.toFixed(1)} m/s · ${(track.speed * 3.6).toFixed(0)} km/h` : '-';
+  $('#hdg').textContent = live && track.speed > 0.2 ? `${track.heading.toFixed(0)}° ${compass(track.heading)}` : '-';
+  $('#rf').textContent = nDet ? `${Math.round(consensusF0)} Hz` : '-';
+  $('#q').textContent = live ? `±${fix.err.toFixed(1)} m · ${fix.rms.toFixed(1)} dB rms` : '-';
+  $('#nodes').innerHTML = '<tr><td>phone</td><td class="r">dB</td><td class="r">Hz</td><td class="r">gain</td></tr>' + nodes.map(n =>
+    `<tr class="${n.det ? 'det' : ''} ${n.age > 2.5 ? 'stale' : ''}"><td>${esc(n.name)}${n.placed ? '' : ' <span class="muted">(unplaced)</span>'}${n.warming ? ' <span class="muted">(learning)</span>' : ''}</td>` +
+    `<td class="r">${n.level > -139 ? n.level.toFixed(0) : '-'}</td><td class="r">${n.det ? Math.round(n.f0) : '-'}</td><td class="r">${(+n.gain).toFixed(1)}</td></tr>`).join('');
+}
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+
+// ---------- drawing
+const cv = $('#cv'), g = cv.getContext('2d');
+let view = { s: 40, cx: 0, cy: 0 };
+function fitView() {
+  const W = +$('#rw').value, H = +$('#rh').value;
+  let ext = Math.max(W, H) / 2;
+  for (const n of nodes) if (n.placed && n.x !== null) ext = Math.max(ext, Math.abs(n.x), Math.abs(n.y));
+  ext *= 1.3;
+  view = { s: Math.min(cv.width, cv.height) / 2 / ext, cx: cv.width / 2, cy: cv.height / 2, ext };
+}
+const P = (x, y) => [view.cx + x * view.s, view.cy - y * view.s];
+const M = (px, py) => [(px - view.cx) / view.s, (view.cy - py) / view.s];
+
+function draw() {
+  const dpr = devicePixelRatio || 1;
+  cv.width = cv.clientWidth * dpr; cv.height = cv.clientHeight * dpr;
+  fitView();
+  const t = performance.now() / 1000, R = Math.min(cv.width, cv.height) / 2;
+  g.fillStyle = '#020905'; g.fillRect(0, 0, cv.width, cv.height);
+  // range rings at a round step
+  const step = [0.5, 1, 2, 5, 10, 20, 50].find(s => view.ext / s <= 5) || 100;
+  g.lineWidth = dpr; g.font = `${11 * dpr}px ui-monospace, Menlo, monospace`;
+  for (let r = step; r <= view.ext * 1.5; r += step) {
+    g.strokeStyle = 'rgba(61,255,138,.18)'; g.beginPath(); g.arc(view.cx, view.cy, r * view.s, 0, 7); g.stroke();
+    g.fillStyle = 'rgba(61,255,138,.45)'; g.fillText(r + ' m', view.cx + 4 * dpr, view.cy - r * view.s - 3 * dpr);
+  }
+  g.strokeStyle = 'rgba(61,255,138,.12)'; g.beginPath(); g.moveTo(view.cx, 0); g.lineTo(view.cx, cv.height); g.moveTo(0, view.cy); g.lineTo(cv.width, view.cy); g.stroke();
+  // room outline
+  const W = +$('#rw').value, H = +$('#rh').value, [rx, ry] = P(-W / 2, H / 2);
+  g.strokeStyle = 'rgba(183,245,207,.35)'; g.setLineDash([6 * dpr, 6 * dpr]); g.strokeRect(rx, ry, W * view.s, H * view.s); g.setLineDash([]);
+  g.fillStyle = 'rgba(183,245,207,.5)'; g.fillText('FRONT', view.cx - 16 * dpr, ry - 6 * dpr);
+  // phones
+  for (const n of nodes) {
+    if (!n.placed || n.x === null) continue;
+    const [x, y] = P(n.x, n.y), stale = n.age > 2.5;
+    if (n.det && !stale) { const pr = (8 + 14 * ((t * 2) % 1)) * dpr; g.strokeStyle = `rgba(255,77,94,${1 - (t * 2) % 1})`; g.lineWidth = 2 * dpr; g.beginPath(); g.arc(x, y, pr, 0, 7); g.stroke(); }
+    g.fillStyle = stale ? '#335' : n.det ? '#ff4d5e' : '#3dff8a';
+    g.fillRect(x - 6 * dpr, y - 6 * dpr, 12 * dpr, 12 * dpr);
+    g.fillStyle = 'rgba(183,245,207,.85)'; g.fillText(n.name + (n.level > -139 ? ' ' + n.level.toFixed(0) + 'dB' : ''), x + 9 * dpr, y + 4 * dpr);
+  }
+  if (loudest) { // zone fallback: the phone hearing it loudest, always shown, needs no model
+    const [x, y] = P(loudest.x, loudest.y); g.strokeStyle = "rgba(255,194,77,.9)"; g.lineWidth = 2 * dpr;
+    g.beginPath(); g.arc(x, y, 22 * dpr, 0, 7); g.stroke(); g.fillStyle = "rgba(255,194,77,.9)"; g.fillText("LOUDEST", x - 24 * dpr, y + 36 * dpr);
+  }
+  // track
+  if (track && fix) {
+    g.strokeStyle = 'rgba(255,194,77,.6)'; g.lineWidth = 2 * dpr; g.beginPath();
+    tracker.trail.forEach((p, i) => { const [x, y] = P(p.x, p.y); i ? g.lineTo(x, y) : g.moveTo(x, y); }); g.stroke();
+    const [x, y] = P(track.x, track.y);
+    g.strokeStyle = "rgba(255,77,94,.45)"; g.lineWidth = 1.5 * dpr; g.setLineDash([3 * dpr, 5 * dpr]); g.beginPath(); g.arc(x, y, Math.max(fix.err, 0.3) * view.s, 0, 7); g.stroke(); g.setLineDash([]); // uncertainty: thin outline, not a filled disc
+    if (track.speed > 0.2) { // 3 s predicted path
+      const [px, py] = P(track.x + track.vx * 3, track.y + track.vy * 3);
+      g.setLineDash([5 * dpr, 5 * dpr]); g.strokeStyle = '#ff4d5e'; g.beginPath(); g.moveTo(x, y); g.lineTo(px, py); g.stroke(); g.setLineDash([]);
+    }
+    g.shadowColor = '#ff4d5e'; g.shadowBlur = 18 * dpr; g.fillStyle = '#ff4d5e'; g.beginPath(); g.arc(x, y, 7 * dpr, 0, 7); g.fill(); g.shadowBlur = 0;
+    g.fillStyle = '#fff'; g.fillText(`${track.speed.toFixed(1)} m/s`, x + 11 * dpr, y - 9 * dpr);
+  }
+  if (sim && sim.truth) { const [x, y] = P(sim.truth.x, sim.truth.y); g.strokeStyle = 'rgba(255,255,255,.5)'; g.beginPath(); g.arc(x, y, 4 * dpr, 0, 7); g.stroke(); }
+  requestAnimationFrame(draw);
+}
+requestAnimationFrame(draw);
+
+// ---------- drag phones into place
+let drag = null;
+function keepDrag(list) { // a poll must not yank a phone out from under the finger
+  if (!drag) return list;
+  const d = list.find(n => n.id === drag.id); if (d) { d.x = drag.x; d.y = drag.y; d.placed = 1; drag = d; }
+  return list;
+}
+cv.addEventListener('pointerdown', e => {
+  const dpr = devicePixelRatio || 1, px = e.offsetX * dpr, py = e.offsetY * dpr;
+  drag = nodes.find(n => n.placed && n.x !== null && Math.hypot(P(n.x, n.y)[0] - px, P(n.x, n.y)[1] - py) < 18 * dpr) || null;
+  if (drag) cv.setPointerCapture(e.pointerId);
+});
+cv.addEventListener('pointermove', e => { if (!drag) return; const dpr = devicePixelRatio || 1; [drag.x, drag.y] = M(e.offsetX * dpr, e.offsetY * dpr); if (sim) sim.layout[+drag.id.slice(1)] = { x: drag.x, y: drag.y }; });
+cv.addEventListener('pointerup', () => {
+  if (!drag) return;
+  drag.x = Math.round(drag.x * 10) / 10; drag.y = Math.round(drag.y * 10) / 10;
+  if (sim) sim.layout[+drag.id.slice(1)] = { x: drag.x, y: drag.y }; else post('place', { id: drag.id, x: drag.x, y: drag.y });
+  drag = null;
+});
+cv.addEventListener('pointercancel', () => { drag = null; });
+cv.addEventListener('lostpointercapture', () => { drag = null; });
+
+// ---------- buttons
+$('#auto').onclick = async () => {
+  const live = nodes.filter(n => n.age < 30).sort((a, b) => a.name.localeCompare(b.name));
+  const spots = Fusion.roomLayout(+$('#rw').value, +$('#rh').value, live.length);
+  for (let i = 0; i < live.length; i++) { Object.assign(live[i], spots[i], { placed: 1 }); if (!sim) await post('place', { id: live[i].id, ...spots[i] }); }
+  if (sim) sim.layout = spots;
+};
+$('#cal').onclick = async () => {
+  const fresh = nodes.filter(n => n.age < 2.5 && n.det);
+  if (fresh.length < 2) { $('#banner').textContent = 'CALIBRATE: need 2+ phones hearing the fake drone'; return; }
+  const mean = fresh.reduce((s, n) => s + n.level, 0) / fresh.length, gains = {};
+  fresh.forEach(n => gains[n.id] = +(mean - n.level).toFixed(2));
+  if (!sim) await post('gains', gains);
+  $('#banner').textContent = 'CALIBRATED ' + fresh.length + ' phones';
+};
+$('#reset').onclick = () => { if (!sim) post('reset', {}); tracker.reset(); track = null; };
+let simTimer = null;
+$('#sim').onclick = () => {
+  mode++; drag = null; fix = track = null; tracker.reset();
+  if (sim) { sim = null; clearInterval(simTimer); $('#sim').textContent = 'SIM off'; $('#sim').classList.remove('on'); nodes = []; tracker.reset(); track = null; return; }
+  sim = { layout: Fusion.roomLayout(+$('#rw').value, +$('#rh').value, 5) };
+  simTimer = setInterval(simStep, 250); $('#sim').textContent = 'SIM on'; $('#sim').classList.add('on');
+};
+if (new URLSearchParams(location.search).has('sim')) $('#sim').click();
+</script>
