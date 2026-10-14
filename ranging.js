@@ -10,12 +10,21 @@
   const C = 343.2; // m/s at ~20 C
 
   // ---------- chirp + matched filter (from P074) ----------
-  function makeChirp(sr, f0, f1, dur = 0.04) {
-    const n = Math.round(sr * dur), re = new Float32Array(n), im = new Float32Array(n), k = (f1 - f0) / dur, a = 0.4; // soft edges: no click
-    for (let i = 0; i < n; i++) {
-      const t = i / sr, ph = 2 * Math.PI * (f0 * t + k * t * t / 2), x = i / (n - 1); // Tukey window
-      const w = x < a / 2 ? 0.5 * (1 - Math.cos(2 * Math.PI * x / a)) : x > 1 - a / 2 ? 0.5 * (1 - Math.cos(2 * Math.PI * (1 - x) / a)) : 1;
-      re[i] = w * Math.cos(ph); im[i] = w * Math.sin(ph);
+  // The beep is a little bird call inside the band [f0, f1]: a quick upward swoop, a tiny pause, then a downward one,
+  // 60 ms, soft edges. Same signal for ranging as a plain sweep (wide band, sharp timing), far easier on the ear.
+  // Returns the analytic signal (re, im) for the matched filter; re is what gets played.
+  function makeChirp(sr, f0, f1, dur = 0.06) {
+    const n = Math.round(sr * dur), re = new Float32Array(n), im = new Float32Array(n);
+    const lo = f0 + 0.1 * (f1 - f0), hi = f1 - 0.1 * (f1 - f0), mid = (lo + hi) / 2, span = (hi - lo) / 2;
+    const seg = [[0, 0.45, +1], [0.55, 1, -1]]; // [start, end] as fraction of dur, direction of the swoop
+    for (const [s0, s1, dir] of seg) {
+      const i0 = Math.round(s0 * n), i1 = Math.round(s1 * n), len = i1 - i0; let ph = 0;
+      for (let i = i0; i < i1; i++) {
+        const u = (i - i0) / (len - 1), f = mid + dir * span * Math.sin(Math.PI * (u - 0.5)); // smooth S-shaped glide between lo and hi
+        ph += 2 * Math.PI * f / sr;
+        const w = Math.sin(Math.PI * u) ** 0.6; // soft on, soft off, no click
+        re[i] = w * Math.cos(ph); im[i] = w * Math.sin(ph);
+      }
     }
     return { re, im, n, sr };
   }
