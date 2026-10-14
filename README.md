@@ -60,6 +60,16 @@ A drone can switch off its radio. A fibre-optic drone never has one. It cannot s
 
 **Setup:** phones in a 2-3 m ring (indoors) or a 6-8 m square (outdoors), flat, screens up, at about flight height, Auto-Lock off. Press **Calibrate** with all phones together first: different phone microphones differ. Full test-day script: `../2026-10-14_drone-ear-poc.md`.
 
+## Calibration: what four real devices taught us (2026-10-14)
+
+Measured with an iPhone 13, iPhone 7, iPad Pro and a MacBook in one room, 13+ rounds each in a pile and spread out:
+
+- **Each device adds a constant to every distance it is part of**, set when its page loads: 0.5 m on the iPhones and iPad, up to 5 m on a MacBook, and different after every reload. It is the browser's audio latency, and the Web Audio latency fields do not report it. Two-way ranging cancels clock *offsets* but not this.
+- **Detection itself is honest to a few cm** once that constant is removed (pile residual 0-3 cm). Lowering the first-peak threshold, shorter slots and sample-rate corrections did not help; the constant did.
+- **So the protocol is:** everyone joins, all devices go in one **pile** (base: "Stos: kalibruj", 3 rounds), then spread out, and nobody reloads. The base drops a device's calibration if its page rejoins; redo the pile for it.
+- 2-6 kHz beeps are not heard by the iPad or iPhone 7 speakers; use 8-12 kHz. The beep is a 60 ms bird call now, same ranging quality as a sweep.
+- On iOS a reloaded page cannot start audio by itself: after a hot reload the phone shows "stuknij Dołącz" and needs one tap.
+
 ## Audience demo ("drone party")
 
 Everyone in the room becomes part of the network.

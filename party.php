@@ -47,7 +47,7 @@ if ($a === 'join') {
   if ($id === '') out(['error' => 'id']);
   $role = in_array($b['role'] ?? '', ['L', 'R'], true) ? $b['role'] : 'audience';
   $db->prepare('INSERT INTO members (id, name, role, joined, seen) VALUES (?, ?, ?, ?, ?)
-    ON CONFLICT(id) DO UPDATE SET name = excluded.name, role = excluded.role, seen = excluded.seen')
+    ON CONFLICT(id) DO UPDATE SET name = excluded.name, role = excluded.role, seen = excluded.seen, joined = excluded.joined')
      ->execute([$id, mb_substr(trim($b['name'] ?? ''), 0, 24) ?: $id, $role, $now, $now]);
   out(['ok' => 1]);
 }
@@ -86,7 +86,7 @@ if ($a === 'levels') { // how loud this phone hears each drone's known pitch
 if ($a === 'data') { // the stage screen reads everything
   $rows = $db->prepare('SELECT * FROM members WHERE seen > ? ORDER BY joined');
   $rows->execute([$now - 120]);
-  $m = array_map(fn($r) => ['id' => $r['id'], 'name' => $r['name'], 'role' => $r['role'], 'age' => round($now - $r['seen'], 1),
+  $m = array_map(fn($r) => ['id' => $r['id'], 'name' => $r['name'], 'role' => $r['role'], 'age' => round($now - $r['seen'], 1), 'joined' => (float)$r['joined'],
     'round' => (int)$r['round'], 'heard' => json_decode($r['heard'] ?? 'null', true), 'levels' => json_decode($r['levels'] ?? 'null', true),
     'lage' => $r['lt'] ? round($now - $r['lt'], 1) : null, 'heading' => $r['heading'] === null ? null : (float)$r['heading'], 'snr' => json_decode($r['snr'] ?? 'null', true), 'lvl' => json_decode($r['lvl'] ?? 'null', true), 'prev' => json_decode($r['prev'] ?? 'null', true), 'lat' => json_decode($r['lat'] ?? 'null', true)], $rows->fetchAll(PDO::FETCH_ASSOC));
   out(['t' => $now * 1000, 'party' => party($db), 'members' => $m, 'stage' => stageHeading($db, $now)]);
