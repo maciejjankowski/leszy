@@ -13,8 +13,12 @@
   #big.ok { border-color: var(--ok); }
   @keyframes pulse { to { filter: brightness(1.4); } }
   #sub { text-align: center; margin-top: 10px; }
+  #toasts { position: fixed; left: 12px; right: 12px; bottom: max(12px, env(safe-area-inset-bottom)); display: flex; flex-direction: column; gap: 6px; z-index: 50; }
+  .toast { background: #0d2416; border: 1px solid var(--ok); color: var(--fg); padding: 10px 12px; border-radius: 10px; box-shadow: 0 4px 14px rgba(0,0,0,.4); }
+  .toast.warn { border-color: var(--warn); }
   .steps { padding-left: 1.2em; } .steps li { margin: .45em 0; }
 </style>
+<div id="toasts"></div>
 <div class="wrap">
   <h1>WIELKI LESZY · NA ŻYWO</h1>
   <div id="joinBox" class="card">
@@ -46,10 +50,15 @@ let id = store('dp_id'); if (!id) { id = 'a' + Math.random().toString(36).slice(
 const qs = new URLSearchParams(location.search), role = (qs.get('role') || '').toUpperCase(); // L / R = stage anchors
 const LOOP = qs.has('loop'); // test mode: no mic, my own output is fed straight into my recorder
 const ROOM = (qs.get('room') || '').replace(/[^a-z0-9]/gi, '').toLowerCase(); // separate room, e.g. the phone check
+const LOCATE = ROOM !== ''; // test room = phone location only, no drones
 $('#name').value = store('dp_name') || '';
 const api = (a, body) => fetch('party.php?a=' + a + (ROOM ? '&room=' + ROOM : '') + (body ? '' : '&id=' + id), body ? { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) } : { cache: 'no-store' }).then(r => r.json());
 
 let ctx, sr, an, out, chirp, chirpBuf, off = 0, chunks = [], lastRound = -1, floor = null, drone = null, droneKey = '', lock;
+function toast(text, warn) {
+  const t = document.createElement('div'); t.className = 'toast' + (warn ? ' warn' : ''); t.textContent = text;
+  $('#toasts').appendChild(t); setTimeout(() => t.remove(), 8000);
+}
 const say = (t, cls, sub) => { $('#big').textContent = t; $('#big').className = cls || ''; $('#sub').textContent = sub || ''; };
 
 async function syncClock() { // server ms - local ms, from the fastest of 6 round trips
@@ -118,7 +127,7 @@ async function start() {
   } catch (e) { prepared = null; $('#err').textContent = 'Nie udało się uruchomić: ' + e.message + (isSecureContext ? '' : ' (wymaga https)'); return; }
   try { lock = await navigator.wakeLock.request('screen'); } catch (e) {}
   $('#joinBox').hidden = true; $('#runBox').hidden = false;
-  say(role ? 'SCENA ' + (role === 'L' ? 'LEWA' : 'PRAWA') : 'Jesteś w grze. Czekam na odliczanie...', 'ok', name);
+  say(role ? 'SCENA ' + (role === 'L' ? 'LEWA' : 'PRAWA') : (LOCATE ? 'Jesteś w grze. Czekam na start...' : 'Jesteś w grze. Czekam na odliczanie...'), 'ok', name);
   setInterval(poll, 1000); setInterval(listen, 250); setInterval(coach, 500);
 }
 
@@ -148,7 +157,7 @@ async function poll() {
   const p = j.party;
   if (p.phase === 'rollcall' && p.round !== lastRound) rollcall(p);
   const key = p.phase === 'drones' ? JSON.stringify(p.drones) : '';
-  if (key !== droneKey) { droneKey = key; droneMode(p); }
+  if (!LOCATE && key !== droneKey) { droneKey = key; droneMode(p); }
 }
 
 function rollcall(p) { // beep in my slot, then find every beep on my own clock
@@ -157,7 +166,7 @@ function rollcall(p) { // beep in my slot, then find every beep on my own clock
   if (k < 0) { say('Dołączyłeś po starcie odliczania: poczekaj na następne.', ''); return; }
   const when = serverToCtx(p.t0 + k * p.slot * 1000);
   const s = ctx.createBufferSource(); s.buffer = chirpBuf; s.connect(out); s.start(Math.max(when, ctx.currentTime + 0.02));
-  say('Odliczanie: jesteś ' + (k + 1) + ' z ' + n, 'beep', 'nie ruszaj telefonu, cisza');
+  say((LOCATE ? 'Piszczymy: ' : 'Odliczanie: ') + 'jesteś ' + (k + 1) + ' z ' + n, 'beep', 'nie ruszaj telefonu, cisza');
   const doneAt = p.t0 + n * p.slot * 1000 + 900;
   setTimeout(async () => {
     const heard = {}, snr = {};
@@ -168,7 +177,9 @@ function rollcall(p) { // beep in my slot, then find every beep on my own clock
       if (r && r.snr > 8) heard[src] = (from + r.sample) / sr;
     });
     await api('heard', { id, round: p.round, heard, snr });
-    say('Na mapie. Usłyszałem ' + Object.keys(heard).length + ' z ' + n + ' pisków.', 'ok', 'teraz nasłuchuję dronów');
+    const others = p.order.filter(o => o !== id), nameOf = o => (p.names && p.names[o]) || o; // toast: whom I heard, whom I missed
+    if (others.length) toast('Słyszę: ' + others.map(o => nameOf(o) + (Number.isFinite(heard[o]) ? ' ✓' : ' ✗')).join(', '), others.some(o => !Number.isFinite(heard[o])));
+    say('Usłyszałem ' + Object.keys(heard).length + ' z ' + n + ' pisków.', 'ok', LOCATE ? 'wynik na ekranie bazy' : 'teraz nasłuchuję dronów');
   }, Math.max(0, doneAt - (Date.now() + off)));
 }
 

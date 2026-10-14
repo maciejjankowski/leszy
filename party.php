@@ -83,10 +83,10 @@ if ($a === 'data') { // the stage screen reads everything
 
 if ($a === 'admin') { // stage screen controls
   $b = body(); $p = party($db); $cmd = $b['cmd'] ?? '';
-  $live = $db->prepare('SELECT id FROM members WHERE seen > ? ORDER BY joined'); $live->execute([$now - 10]);
-  $ids = $live->fetchAll(PDO::FETCH_COLUMN);
+  $live = $db->prepare('SELECT id, name FROM members WHERE seen > ? ORDER BY joined'); $live->execute([$now - 10]);
+  $names = $live->fetchAll(PDO::FETCH_KEY_PAIR); $ids = array_keys($names); // names travel with the round, so phones can say whom they heard
   if ($cmd === 'rollcall') { // everyone beeps once, 0.5 s apart, starting 4 s from now
-    $p = ['phase' => 'rollcall', 'round' => ($p['round'] ?? 0) + 1, 't0' => ($now + 4) * 1000, 'slot' => 0.5, 'order' => $ids, 'band' => [8000, 12000], 'drones' => []];
+    $p = ['phase' => 'rollcall', 'round' => ($p['round'] ?? 0) + 1, 't0' => ($now + 4) * 1000, 'slot' => 0.5, 'order' => $ids, 'names' => $names, 'band' => [8000, 12000], 'drones' => []];
   } elseif ($cmd === 'drones') { // k random audience phones become drones, each with its own rotor pitch
     $pool = $db->prepare("SELECT id FROM members WHERE seen > ? AND role = 'audience'"); $pool->execute([$now - 10]);
     $cand = $pool->fetchAll(PDO::FETCH_COLUMN); shuffle($cand);

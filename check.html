@@ -3,35 +3,48 @@
 <title>Wielki Leszy - baza</title>
 <link rel="stylesheet" href="style.css">
 <style>
+  body { overflow-x: hidden; }
+  .layout { display: grid; grid-template-columns: minmax(0, 560px); justify-content: center; gap: 16px; padding: max(16px, env(safe-area-inset-top)) 16px 24px; }
+  @media (min-width: 960px) { .layout { grid-template-columns: minmax(0, 560px) 360px; align-items: start; } }
   #qrBox { text-align: center; }
   #qr { background: #fff; padding: 10px; border-radius: 12px; display: inline-block; }
   #count { font-size: 2.6em; text-align: center; margin: .1em 0 .3em; }
   #go { width: 100%; margin-top: 6px; }
-  #map { width: 100%; aspect-ratio: 1; max-height: 70vh; background: #020905; border-radius: 12px; display: block;  margin-top: 14px; }
-  details { margin-top: 10px; } summary { cursor: pointer; color: var(--dim); padding: 6px 0; }
+  .label { font-size: .8em; letter-spacing: .12em; text-transform: uppercase; color: var(--dim); margin: 16px 0 6px; }
+  #map { width: 100%; aspect-ratio: 1; max-height: 70vh; background: #020905; border-radius: 12px; display: block; }
+  aside { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 12px; }
+  aside .label:first-child { margin-top: 0; }
   .grid { overflow-x: auto; }
   table { border-collapse: collapse; font-size: .8em; }
   th, td { border: 1px solid var(--line); padding: 4px 6px; text-align: center; white-space: nowrap; }
   td.ok { color: var(--ok); } td.bad { color: var(--hot); } td.self { color: var(--dim); }
   input.tape { width: 4.5em; padding: .2em; }
+  #toasts { position: fixed; right: 12px; bottom: max(12px, env(safe-area-inset-bottom)); display: flex; flex-direction: column; gap: 6px; z-index: 50; max-width: min(90vw, 340px); }
+  .toast { background: #0d2416; border: 1px solid var(--ok); color: var(--fg); padding: 8px 12px; border-radius: 10px; font-size: .9em; box-shadow: 0 4px 14px rgba(0,0,0,.4); animation: tin .25s ease-out; }
+  .toast.warn { border-color: var(--warn); }
+  @keyframes tin { from { transform: translateY(8px); opacity: 0; } }
 </style>
-<div class="wrap">
-  <div id="qrBox">
-    <div id="qr"></div>
-    <div id="count">0</div>
-  </div>
-  <button class="big" id="go">Start</button>
-  <p class="muted" id="status" style="text-align:center"></p>
-  <canvas id="map"></canvas>
-  <p class="muted" id="fit" style="text-align:center"></p>
-  <details><summary>Szczegóły</summary>
-    <p class="muted">Kto kogo usłyszał (wiersz słucha, kolumna piszczy; poniżej 8 = nie usłyszał):</p><div class="grid" id="matrix"></div>
-    <p class="muted">Odległości (wpisz zmierzoną taśmą, zobaczysz błąd):</p><div class="grid" id="pairs"></div>
-    <p class="row"><button id="selfJoin">Ta baza też gra</button><button id="reset">Nowa runda</button></p>
-    <iframe id="selfNode" hidden allow="microphone; autoplay; screen-wake-lock" style="width:100%;height:640px;border:1px solid var(--line);border-radius:12px;background:#04100a"></iframe>
-    <p class="muted" id="url" style="word-break:break-all;font-size:.75em"></p>
-  </details>
+<div class="layout">
+  <main>
+    <div id="qrBox"><div id="qr"></div><div id="count">0</div></div>
+    <button class="big" id="go">Start</button>
+    <p class="muted" id="status" style="text-align:center"></p>
+    <p class="label">Mapa: gdzie są telefony</p>
+    <canvas id="map"></canvas>
+    <p class="muted" id="fit" style="text-align:center"></p>
+  </main>
+  <aside>
+    <p class="label">Kto kogo usłyszał</p>
+    <p class="muted" style="font-size:.75em">wiersz słucha, kolumna piszczy · poniżej 8 = nie usłyszał</p>
+    <div class="grid" id="matrix"></div>
+    <p class="label">Odległości</p>
+    <p class="muted" style="font-size:.75em">wpisz zmierzoną taśmą, zobaczysz błąd</p>
+    <div class="grid" id="pairs"></div>
+    <p class="row" style="margin-top:14px"><a id="selfJoin" target="_blank" rel="noopener">Dołącz tym urządzeniem</a> · <button id="reset">Nowa runda</button></p>
+    <p class="muted" id="url" style="word-break:break-all;font-size:.7em"></p>
+  </aside>
 </div>
+<div id="toasts"></div>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 <script src="ranging.js"></script>
 <script>
@@ -42,6 +55,7 @@ const joinUrl = location.href.replace(/check\.html.*$/, 'party.html') + '?room='
   let pin = ''; try { pin = (await (await fetch('pin.php?qrinfo=1', { cache: 'no-store' })).json()).pin || ''; } catch (e) {}
   const u = joinUrl + (pin ? '&pin=' + pin : '');
   $('#url').textContent = u;
+  $('#selfJoin').href = u; // join with this device in a new window
   const w = Math.min(260, innerWidth - 80);
   try { new QRCode($('#qr'), { text: u, width: w, height: w }); } catch (e) {}
 })();
@@ -49,14 +63,15 @@ $('#go').onclick = () => hub('admin', { cmd: 'rollcall' }).then(j => {
   const n = j.party.order.length;
   $('#status').textContent = n < 2 ? 'Potrzeba co najmniej 3 telefonów.' : 'Piszczą... ' + Math.round(n * 0.5 + 5) + ' s ciszy';
 });
-$('#selfJoin').onclick = () => { // the guest page inside the base, same room; mic is asked there (Test / Dołącz)
-  const f = $('#selfNode'); if (!f.src) f.src = 'party.html?room=' + ROOM + '&base=1';
-  f.hidden = false; $('#selfJoin').hidden = true;
-};
 $('#reset').onclick = () => { hub('admin', { cmd: 'reset' }); last = ''; };
 const tape = {};
 const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
+const toasted = new Set();
+function toast(text, warn) {
+  const t = document.createElement('div'); t.className = 'toast' + (warn ? ' warn' : ''); t.textContent = text;
+  $('#toasts').appendChild(t); setTimeout(() => t.remove(), 6000);
+}
 let last = '';
 async function poll() {
   let d; try { d = await hub('data'); } catch (e) { $('#status').textContent = 'Brak połączenia z bazą'; return; }
@@ -64,6 +79,18 @@ async function poll() {
   $('#count').textContent = live.length;
   const done = d.members.filter(m => m.round === p.round && m.heard);
   if (p.phase === 'rollcall' && p.round) $('#status').textContent = done.length < p.order.length ? 'wyniki: ' + done.length + ' z ' + p.order.length : '';
+  const fresh = done.filter(m => !toasted.has(p.round + ':' + m.id)); // results that just arrived
+  if (fresh.length) {
+    const short = [];
+    for (const m of fresh) {
+      toasted.add(p.round + ':' + m.id);
+      const others = p.order.filter(o => o !== m.id), heardN = others.filter(o => Number.isFinite(m.heard[o])).length;
+      if (heardN < others.length) short.push((m.name || m.id) + ': słyszy ' + heardN + ' z ' + others.length);
+    }
+    if (fresh.length > 3 || !short.length) toast('Wyniki: ' + fresh.length + ' tel., ' + (fresh.length - short.length) + ' słyszy wszystkich', short.length > 0);
+    short.slice(0, 3).forEach(t => toast(t, true));
+    if (short.length > 3) toast('...i jeszcze ' + (short.length - 3) + ' z brakami (tabela obok)', true);
+  }
   const key = JSON.stringify(done.map(m => [m.id, m.round, m.heard])) + JSON.stringify(tape);
   if (key === last) return; last = key;
   const ids = (p.order || []).filter(id => d.members.some(m => m.id === id)), by = Object.fromEntries(d.members.map(m => [m.id, m]));
