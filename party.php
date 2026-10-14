@@ -39,7 +39,11 @@ $now = microtime(true);
 $a = $_GET['a'] ?? 'state';
 
 // deployed app version = newest mtime of the guest page and its scripts; guest pages reload themselves when it changes
-function appVersion() { $v = 0; foreach (['party.html', 'ranging.js', 'tap-worklet.js', 'synth.js', 'style.css'] as $f) $v = max($v, @filemtime(__DIR__ . '/' . $f) ?: 0); return $v; }
+function appVersion() { // content hash, not mtime: a deploy that touches only other files must not reload the phones
+  static $v = null; if ($v !== null) return $v;
+  $h = ''; foreach (['party.html', 'ranging.js', 'tap-worklet.js', 'synth.js', 'style.css'] as $f) $h .= @md5_file(__DIR__ . '/' . $f) ?: '';
+  return $v = substr(md5($h), 0, 12);
+}
 if ($a === 'time') out(['t' => $now * 1000]);
 
 if ($a === 'join') {
