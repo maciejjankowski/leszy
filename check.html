@@ -18,6 +18,7 @@
   table { border-collapse: collapse; font-size: .8em; }
   th, td { border: 1px solid var(--line); padding: 4px 6px; text-align: center; white-space: nowrap; }
   tr.sus td { color: var(--warn); }
+  td.dead { color: #000; background: var(--hot); font-weight: bold; }
   td.ok { color: var(--ok); } td.bad { color: var(--hot); } td.self { color: var(--dim); }
   input.tape { width: 4.5em; padding: .2em; }
   #toasts { position: fixed; right: 12px; bottom: max(12px, env(safe-area-inset-bottom)); display: flex; flex-direction: column; gap: 6px; z-index: 50; max-width: min(90vw, 340px); }
@@ -140,6 +141,7 @@ async function poll() {
   for (const r of ids) h += '<tr><th>' + nm(r) + '</th>' + ids.map(c => {
     const m = by[r], s = m && m.snr ? m.snr[c] : null, heard = m && m.heard && Number.isFinite(m.heard[c]);
     if (!m || m.round !== p.round) return '<td class="self">...</td>';
+    if (r === c && m && m.round === p.round && !(s > 8)) return '<td class="dead" title="nie słyszy własnego pisku: głośnik nie gra, stuknij ten telefon">głuchy</td>';
     return '<td class="' + (r === c ? 'self' : heard ? 'ok' : 'bad') + '">' + (s == null ? '-' : s) + (heard ? '' : ' x') + '</td>';
   }).join('') + '</tr>';
   $('#matrix').innerHTML = ids.length ? h + '</table>' : '<p class="muted">Jeszcze nie było rundy.</p>';

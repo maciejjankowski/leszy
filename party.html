@@ -198,7 +198,8 @@ function rollcall(p) { // beep in my slot, then find every beep on my own clock
     roundBusy = false;
     const others = p.order.filter(o => o !== id), nameOf = o => (p.names && p.names[o]) || o; // toast: whom I heard, whom I missed
     if (others.length && !p.walker) toast('Słyszę: ' + others.map(o => nameOf(o) + (Number.isFinite(heard[o]) ? ' ✓' : ' ✗')).join(', '), others.some(o => !Number.isFinite(heard[o])));
-    say('Usłyszałem ' + Object.keys(heard).length + ' z ' + n + ' pisków.', 'ok', LOCATE ? 'wynik na ekranie bazy' : 'teraz nasłuchuję dronów');
+    if (!(snr[id] > 8)) { say('NIE SŁYSZĘ SIEBIE', 'drone', 'stuknij tutaj, żeby włączyć dźwięk'); needTap = true; return; } // output never started (iOS after a reload): a tap fixes it
+    say('Usłyszałem ' + Object.keys(heard).length + ' z ' + n + ' pisków.','ok', LOCATE ? 'wynik na ekranie bazy' : 'teraz nasłuchuję dronów');
   }, Math.max(0, doneAt - (Date.now() + off)));
 }
 
@@ -242,6 +243,9 @@ async function tone() {
 $('#go').onclick = start; $('#test').onclick = test; $('#tone').onclick = tone;
 // after a hot reload: rejoin by itself (mic permission is already granted for this site; audio may need one tap on iOS, then it says so)
 if (store('dp_joined') === '1' && !LOOP) start().catch(() => {});
+// a tap on the big status (or anywhere on the page) restarts audio output after an automatic rejoin
+let needTap = false;
+document.addEventListener('pointerdown', async () => { if (!ctx) return; try { await ctx.resume(); } catch (e) {} if (needTap && ctx.state === 'running') { needTap = false; say('Dźwięk włączony. Czekam na następny start.', 'ok', ''); } }, { passive: true });
 document.addEventListener('visibilitychange', () => { if (!document.hidden && ctx) ctx.resume(); });
 </script>
 </html>
