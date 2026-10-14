@@ -59,7 +59,7 @@ const LOCATE = ROOM !== ''; // test room = phone location only, no drones
 $('#name').value = store('dp_name') || '';
 const api = (a, body) => fetch('party.php?a=' + a + (ROOM ? '&room=' + ROOM : '') + (body ? '' : '&id=' + id), body ? { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) } : { cache: 'no-store' }).then(r => r.json());
 
-let ctx, sr, an, out, chirp, chirpBuf, off = 0, chunks = [], lastRound = -1, floor = null, drone = null, droneKey = '', lock;
+let appVer = 0, roundBusy = false, ctx, sr, an, out, chirp, chirpBuf, off = 0, chunks = [], lastRound = -1, floor = null, drone = null, droneKey = '', lock;
 function toast(text, warn) {
   const t = document.createElement('div'); t.className = 'toast' + (warn ? ' warn' : ''); t.textContent = text;
   $('#toasts').appendChild(t); setTimeout(() => t.remove(), 8000);
@@ -161,6 +161,7 @@ async function poll() {
   let j; try { j = await api('state'); } catch (e) { return; }
   stageHeading = j.stage;
   const p = j.party;
+  if (j.ver) { if (!appVer) appVer = j.ver; else if (j.ver !== appVer && !roundBusy) { say('Nowa wersja, przeładowuję...', 'warm', ''); setTimeout(() => location.reload(), 800); return; } } // hot reload after a deploy
   if (p.phase === 'rollcall' && p.round !== lastRound) rollcall(p);
   const key = p.phase === 'drones' ? JSON.stringify(p.drones) : '';
   if (!LOCATE && key !== droneKey) { droneKey = key; droneMode(p); }
@@ -176,19 +177,24 @@ function rollcall(p) { // beep in my slot, then find every beep on my own clock
     chirpBuf = ctx.createBuffer(1, chirp.n, sr); chirpBuf.getChannelData(0).set(chirp.re.map(v => v * 0.9));
   }
   if (k < 0) { say('Dołączyłeś po starcie odliczania: poczekaj na następne.', ''); return; }
+  roundBusy = true; // no reload while beeping or listening
   const when = serverToCtx(p.t0 + k * p.slot * 1000);
   const s = ctx.createBufferSource(); s.buffer = chirpBuf; s.connect(out); s.start(Math.max(when, ctx.currentTime + 0.02));
   if (p.walker === id) say('Idziesz: piszczę pierwszy', 'beep', 'ruszaj się spokojnie'); else say((LOCATE ? 'Piszczymy: ' : 'Odliczanie: ') + 'jesteś ' + (k + 1) + ' z ' + n, 'beep', p.walker ? 'odpowiadam idącemu' : 'nie ruszaj telefonu, cisza');
   const doneAt = p.t0 + n * p.slot * 1000 + 900;
   setTimeout(async () => {
     const heard = {}, snr = {}, lvl = {};
+    // my own beep reaches my mic after the OUTPUT latency (speaker path), which the frame stamp of the mic does not include;
+    // other phones' beeps do not have that lag. Correct my own stamp by it, and report both numbers so the base can see them.
+    const outLat = Number.isFinite(ctx.outputLatency) ? ctx.outputLatency : 0, baseLat = Number.isFinite(ctx.baseLatency) ? ctx.baseLatency : 0;
     p.order.forEach((src, j) => {
       const ws = serverToCtx(p.t0 + j * p.slot * 1000) - 0.12, from = Math.round(ws * sr);
       const r = Ranging.detectFirst(readRing(from, Math.round(0.45 * sr)), chirp, { frac: p.frac, lookMs: p.lookMs }); // picker settings come with the round
       if (r) { snr[src] = Math.round(r.snr); lvl[src] = Math.round(200 * Math.log10(r.peak + 1e-12)) / 10; } // dB, for device profiles
-      if (r && r.snr > 8) heard[src] = (from + r.sample) / sr;
+      if (r && r.snr > 8) heard[src] = (from + r.sample) / sr - (src === id ? outLat : 0);
     });
-    await api('heard', { id, round: p.round, heard, snr, lvl });
+    await api('heard', { id, round: p.round, heard, snr, lvl, lat: { out: outLat, base: baseLat, sr } });
+    roundBusy = false;
     const others = p.order.filter(o => o !== id), nameOf = o => (p.names && p.names[o]) || o; // toast: whom I heard, whom I missed
     if (others.length && !p.walker) toast('Słyszę: ' + others.map(o => nameOf(o) + (Number.isFinite(heard[o]) ? ' ✓' : ' ✗')).join(', '), others.some(o => !Number.isFinite(heard[o])));
     say('Usłyszałem ' + Object.keys(heard).length + ' z ' + n + ' pisków.', 'ok', LOCATE ? 'wynik na ekranie bazy' : 'teraz nasłuchuję dronów');
