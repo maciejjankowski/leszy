@@ -5,9 +5,9 @@
 <style>
   #qrBox { text-align: center; }
   #qr { background: #fff; padding: 10px; border-radius: 12px; display: inline-block; }
-  #count { font-size: 2.2em; text-align: center; margin: .2em 0 0; }
-  #go { width: 100%; }
-  #map { width: 100%; aspect-ratio: 1; max-height: 70vh; background: #020905; border-radius: 12px; display: block; }
+  #count { font-size: 2.6em; text-align: center; margin: .1em 0 .3em; }
+  #go { width: 100%; margin-top: 6px; }
+  #map { width: 100%; aspect-ratio: 1; max-height: 70vh; background: #020905; border-radius: 12px; display: block;  margin-top: 14px; }
   details { margin-top: 10px; } summary { cursor: pointer; color: var(--dim); padding: 6px 0; }
   .grid { overflow-x: auto; }
   table { border-collapse: collapse; font-size: .8em; }
@@ -16,29 +16,21 @@
   input.tape { width: 4.5em; padding: .2em; }
 </style>
 <div class="wrap">
-  <h1>WIELKI LESZY · BAZA</h1>
-  <div class="card" id="qrBox">
-    <p>Zeskanuj kod, stuknij <b>Test</b>, potem <b>Dołącz</b>.</p>
+  <div id="qrBox">
     <div id="qr"></div>
+    <div id="count">0</div>
+  </div>
+  <button class="big" id="go">Start</button>
+  <p class="muted" id="status" style="text-align:center"></p>
+  <canvas id="map"></canvas>
+  <p class="muted" id="fit" style="text-align:center"></p>
+  <details><summary>Szczegóły</summary>
+    <p class="muted">Kto kogo usłyszał (wiersz słucha, kolumna piszczy; poniżej 8 = nie usłyszał):</p><div class="grid" id="matrix"></div>
+    <p class="muted">Odległości (wpisz zmierzoną taśmą, zobaczysz błąd):</p><div class="grid" id="pairs"></div>
+    <p class="row"><button id="selfJoin">Ta baza też gra</button><button id="reset">Nowa runda</button></p>
+    <iframe id="selfNode" hidden allow="microphone; autoplay; screen-wake-lock" style="width:100%;height:640px;border:1px solid var(--line);border-radius:12px;background:#04100a"></iframe>
     <p class="muted" id="url" style="word-break:break-all;font-size:.75em"></p>
-    <div id="count">0</div><p class="muted" style="text-align:center;margin:0">telefonów w grze</p>
-  </div>
-  <div class="card">
-    <button class="big" id="go">Start: telefony piszczą po kolei</button>
-    <p class="muted" id="status" style="text-align:center"></p>
-  </div>
-  <div class="card">
-    <p class="muted">Ta baza sama nie słucha. Mało telefonów? Dołącz też tym urządzeniem: będzie piszczeć i słuchać jak gość.</p>
-    <button id="selfJoin">Ta baza też gra</button>
-    <iframe id="selfNode" hidden allow="microphone; autoplay; screen-wake-lock" style="width:100%;height:640px;border:1px solid var(--line);border-radius:12px;margin-top:10px;background:#04100a"></iframe>
-  </div>
-  <div class="card">
-    <canvas id="map"></canvas>
-    <p class="muted" id="fit"></p>
-    <details><summary>Kto kogo usłyszał</summary><p class="muted">Wiersz = słuchający, kolumna = piszczący. Liczba = wyrazistość sygnału; poniżej 8 = nie usłyszał.</p><div class="grid" id="matrix"></div></details>
-    <details><summary>Odległości (z taśmą: wpisz zmierzoną)</summary><div class="grid" id="pairs"></div></details>
-    <p class="row" style="margin-top:12px"><button id="reset">Nowa runda od zera</button></p>
-  </div>
+  </details>
 </div>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 <script src="ranging.js"></script>
@@ -55,7 +47,7 @@ const joinUrl = location.href.replace(/check\.html.*$/, 'party.html') + '?room='
 })();
 $('#go').onclick = () => hub('admin', { cmd: 'rollcall' }).then(j => {
   const n = j.party.order.length;
-  $('#status').textContent = n < 2 ? 'Za mało telefonów: potrzeba co najmniej 3.' : 'Piszczy ' + n + ' telefonów, około ' + Math.round(n * 0.5 + 5) + ' s. Cisza na sali!';
+  $('#status').textContent = n < 2 ? 'Potrzeba co najmniej 3 telefonów.' : 'Piszczą... ' + Math.round(n * 0.5 + 5) + ' s ciszy';
 });
 $('#selfJoin').onclick = () => { // the guest page inside the base, same room; mic is asked there (Test / Dołącz)
   const f = $('#selfNode'); if (!f.src) f.src = 'party.html?room=' + ROOM + '&base=1';
@@ -71,7 +63,7 @@ async function poll() {
   const live = d.members.filter(m => m.age < 20), p = d.party;
   $('#count').textContent = live.length;
   const done = d.members.filter(m => m.round === p.round && m.heard);
-  if (p.phase === 'rollcall' && p.round) $('#status').textContent = done.length < p.order.length ? 'Zbieram wyniki: ' + done.length + ' z ' + p.order.length : 'Gotowe: ' + done.length + ' telefonów na mapie.';
+  if (p.phase === 'rollcall' && p.round) $('#status').textContent = done.length < p.order.length ? 'wyniki: ' + done.length + ' z ' + p.order.length : '';
   const key = JSON.stringify(done.map(m => [m.id, m.round, m.heard])) + JSON.stringify(tape);
   if (key === last) return; last = key;
   const ids = (p.order || []).filter(id => d.members.some(m => m.id === id)), by = Object.fromEntries(d.members.map(m => [m.id, m]));
@@ -96,17 +88,17 @@ function drawMap(lay, nm) {
   const cv = $('#map'), g = cv.getContext('2d'), dpr = devicePixelRatio || 1;
   cv.width = cv.clientWidth * dpr; cv.height = cv.clientHeight * dpr; g.fillStyle = '#020905'; g.fillRect(0, 0, cv.width, cv.height);
   g.font = (13 * dpr) + 'px ui-monospace, Menlo, monospace';
-  if (!lay) { $('#fit').textContent = ''; g.fillStyle = '#5f9a77'; g.fillText('Tu pojawi się mapa (min. 3 telefony)', 14 * dpr, cv.height / 2); return; }
-  $('#fit').textContent = 'Zgodność: mapa różni się od zmierzonych odległości średnio o ' + lay.rms.toFixed(2) + ' m (im mniej, tym lepiej). Obrót i lustrzane odbicie są tu dowolne.';
+  if (!lay) { $('#fit').textContent = ''; g.fillStyle = '#5f9a77';  return; }
+  $('#fit').textContent = 'zgodność ±' + lay.rms.toFixed(2) + ' m';
   const pts = Object.entries(lay.pos), xs = pts.map(p => p[1].x), ys = pts.map(p => p[1].y);
   const mx = (Math.min(...xs) + Math.max(...xs)) / 2, my = (Math.min(...ys) + Math.max(...ys)) / 2;
   const ext = Math.max(1, ...pts.map(([, p]) => Math.max(Math.abs(p.x - mx), Math.abs(p.y - my)))) * 1.35, s = Math.min(cv.width, cv.height) / 2 / ext;
   g.strokeStyle = 'rgba(61,255,138,.15)'; for (let r = 1; r <= ext * 1.5; r++) { g.beginPath(); g.arc(cv.width / 2, cv.height / 2, r * s, 0, 7); g.stroke(); }
-  g.fillStyle = 'rgba(61,255,138,.5)'; g.fillText('1 m', cv.width / 2 + 4 * dpr, cv.height / 2 - s - 4 * dpr);
-  for (const [id, p] of pts) {
+    for (const [id, p] of pts) {
     const x = cv.width / 2 + (p.x - mx) * s, y = cv.height / 2 - (p.y - my) * s;
     g.fillStyle = '#3dff8a'; g.beginPath(); g.arc(x, y, 7 * dpr, 0, 7); g.fill();
-    g.fillStyle = '#d6f5e1'; g.fillText(nm(id).replace(/&amp;/g, '&'), x + 10 * dpr, y + 4 * dpr);
+    const label = nm(id).replace(/&amp;/g, '&'), lw = g.measureText(label).width; // near the right edge: label goes left of the dot
+    g.fillStyle = '#d6f5e1'; g.fillText(label, x + 10 * dpr + lw > cv.width ? x - 10 * dpr - lw : x + 10 * dpr, y + 4 * dpr);
   }
 }
 setInterval(poll, 1000); poll();
