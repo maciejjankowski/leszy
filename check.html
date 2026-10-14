@@ -28,6 +28,11 @@
     <p class="muted" id="status" style="text-align:center"></p>
   </div>
   <div class="card">
+    <p class="muted">Ta baza sama nie słucha. Mało telefonów? Dołącz też tym urządzeniem: będzie piszczeć i słuchać jak gość.</p>
+    <button id="selfJoin">Ta baza też gra</button>
+    <iframe id="selfNode" hidden allow="microphone; autoplay; screen-wake-lock" style="width:100%;height:640px;border:1px solid var(--line);border-radius:12px;margin-top:10px;background:#04100a"></iframe>
+  </div>
+  <div class="card">
     <canvas id="map"></canvas>
     <p class="muted" id="fit"></p>
     <details><summary>Kto kogo usłyszał</summary><p class="muted">Wiersz = słuchający, kolumna = piszczący. Liczba = wyrazistość sygnału; poniżej 8 = nie usłyszał.</p><div class="grid" id="matrix"></div></details>
@@ -52,6 +57,10 @@ $('#go').onclick = () => hub('admin', { cmd: 'rollcall' }).then(j => {
   const n = j.party.order.length;
   $('#status').textContent = n < 2 ? 'Za mało telefonów: potrzeba co najmniej 3.' : 'Piszczy ' + n + ' telefonów, około ' + Math.round(n * 0.5 + 5) + ' s. Cisza na sali!';
 });
+$('#selfJoin').onclick = () => { // the guest page inside the base, same room; mic is asked there (Test / Dołącz)
+  const f = $('#selfNode'); if (!f.src) f.src = 'party.html?room=' + ROOM + '&base=1';
+  f.hidden = false; $('#selfJoin').hidden = true;
+};
 $('#reset').onclick = () => { hub('admin', { cmd: 'reset' }); last = ''; };
 const tape = {};
 const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
