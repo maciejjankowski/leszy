@@ -30,6 +30,11 @@
     <div id="qrBox"><div id="qr"></div><div id="count">0</div></div>
     <button class="big" id="go">Start</button>
     <p class="muted" id="status" style="text-align:center"></p>
+    <details id="settings"><summary>Ustawienia</summary>
+      <p class="row"><label>Pasmo pisku <select id="band"><option value="mid">średnie 2-6 kHz: słyszalne, omija ludzi</option><option value="high">wysokie 8-12 kHz</option><option value="quiet">ciche 14-18 kHz: ledwo słyszalne, krótszy zasięg</option></select></label></p>
+      <p class="row"><label>Temperatura <input id="temp" type="number" step="1" style="width:4em"> °C</label> <span class="muted" id="cspeed"></span></p>
+      <p class="row"><label>Pisk co <select id="slot"><option value="0.5">0,5 s</option><option value="1">1 s</option><option value="2">2 s</option></select></label> <span class="muted">dłuższy odstęp = mniej nakładania się ech</span></p>
+    </details>
     <p class="label">Mapa: gdzie są telefony</p>
     <canvas id="map"></canvas>
     <p class="muted" id="fit" style="text-align:center"></p>
@@ -39,7 +44,6 @@
     <p class="muted" style="font-size:.75em">wiersz słucha, kolumna piszczy · poniżej 8 = nie usłyszał</p>
     <div class="grid" id="matrix"></div>
     <p class="label">Kalibracja</p>
-    <p class="row" style="font-size:.85em">temperatura <input id="temp" type="number" step="1" style="width:4em;padding:.2em"> °C · pasmo <select id="band" style="padding:.2em"><option value="high">wysokie 8-12 kHz</option><option value="mid">średnie 2-6 kHz (głośniejsze, omija ludzi)</option><option value="quiet">ciche 14-18 kHz (ledwo słyszalne, krótszy zasięg)</option></select></p>
     <p class="muted" style="font-size:.75em">Połóż 2 lub więcej telefonów na jednym stosie i stuknij je po kolei na mapie: stos kalibruje odległość i głośność. Albo wpisz taśmą 1-2 odległości poniżej.</p>
     <p class="muted" id="zeroList" style="font-size:.75em"></p>
     <p class="muted" id="cal" style="font-size:.75em"></p>
@@ -68,16 +72,18 @@ const joinUrl = location.href.replace(/check\.html.*$/, 'party.html') + '?room='
   const w = Math.min(260, innerWidth - 80);
   try { new QRCode($('#qr'), { text: u, width: w, height: w }); } catch (e) {}
 })();
-$('#go').onclick = () => hub('admin', { cmd: 'rollcall', band: $('#band').value }).then(j => {
+$('#go').onclick = () => hub('admin', { cmd: 'rollcall', band: $('#band').value, slot: +$('#slot').value }).then(j => {
   const n = j.party.order.length;
-  $('#status').textContent = n < 2 ? 'Potrzeba co najmniej 3 telefonów.' : 'Piszczą... ' + Math.round(n * 0.5 + 5) + ' s ciszy';
+  $('#status').textContent = n < 2 ? 'Potrzeba co najmniej 3 telefonów.' : 'Piszczą... ' + Math.round(n * (+$('#slot').value) + 5) + ' s ciszy';
 });
 $('#reset').onclick = () => { hub('admin', { cmd: 'reset' }); last = ''; };
 const store = (k, v) => { try { if (v === undefined) return localStorage.getItem(k); localStorage.setItem(k, v); } catch (e) {} };
 let tape = {}; try { tape = JSON.parse(store('dp_tape') || '{}'); } catch (e) {}
 $('#temp').value = store('dp_temp') || 21; $('#band').value = store('dp_band') || 'high';
-$('#temp').onchange = () => { store('dp_temp', $('#temp').value); last = ''; };
+$('#temp').onchange = () => { store('dp_temp', $('#temp').value); last = ''; showSpeed(); };
 $('#band').onchange = () => store('dp_band', $('#band').value);
+$('#slot').value = store('dp_slot') || '0.5'; $('#slot').onchange = () => store('dp_slot', $('#slot').value);
+const showSpeed = () => { $('#cspeed').textContent = 'dźwięk ' + Ranging.soundSpeed(+$('#temp').value || 21).toFixed(1) + ' m/s'; }; showSpeed();
 const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
 const toasted = new Set();
@@ -121,7 +127,7 @@ async function poll() {
   const fit = Ranging.fitOffsets(rawD, tapeOk); // tape-measured pairs -> per-phone speaker-mic offset
   const offset = Object.fromEntries(dIds.map(i => [i, fit.k[i] ?? fit.shared]));
   const dists = Ranging.pairDistances(dIds, heard, { c, offset });
-  $('#cal').textContent = fit.n ? 'Poprawka z ' + fit.n + ' pomiarów taśmą: ' + (fit.shared * 100).toFixed(0) + ' cm na telefon' + (Object.keys(fit.k).length > 1 && fit.n >= Object.keys(fit.k).length ? ' (osobno dla każdego)' : ' (wspólna)') + ' · c = ' + c.toFixed(1) + ' m/s' : 'c = ' + c.toFixed(1) + ' m/s · bez pomiarów taśmą';
+  $('#cal').textContent = fit.n ? 'Poprawka z ' + fit.n + ' pomiarów taśmą: ' + (fit.shared * 100).toFixed(0) + ' cm na telefon' + (Object.keys(fit.k).length > 1 && fit.n >= Object.keys(fit.k).length ? ' (osobno dla każdego)' : ' (wspólna)') : 'bez pomiarów taśmą ani stosu';
   const used = dIds.filter(i => dists.some(x => x.a === i || x.b === i));
   const lay = used.length >= 3 ? Ranging.layout(used, dists, { iters: 200, robust: true, init: target }) : null; // springs, warm start from the last map
   const sus = new Set((lay ? lay.suspect : []).map(x => x.a + '|' + x.b));
