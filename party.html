@@ -6,6 +6,7 @@
 <meta name="apple-mobile-web-app-title" content="Leszy">
 <link rel="apple-touch-icon" href="icon-192.png">
 <link rel="manifest" href="party-manifest.php">
+<script>(function () { const r = new URLSearchParams(location.search).get("room"); if (r) document.querySelector("link[rel=manifest]").href = "party-manifest.php?room=" + encodeURIComponent(r); })();</script>
 <style>
   #big { text-align: center; padding: 28px 12px; border-radius: 16px; border: 2px solid var(--line); font-size: 1.5em; letter-spacing: .06em; margin-top: 12px; }
   #big.beep { background: var(--warn); color: #000; border-color: var(--warn); }
@@ -16,7 +17,10 @@
   #toasts { position: fixed; left: 12px; right: 12px; bottom: max(12px, env(safe-area-inset-bottom)); display: flex; flex-direction: column; gap: 6px; z-index: 50; }
   .toast { background: #0d2416; border: 1px solid var(--ok); color: var(--fg); padding: 10px 12px; border-radius: 10px; box-shadow: 0 4px 14px rgba(0,0,0,.4); }
   .toast.warn { border-color: var(--warn); }
-  .steps { padding-left: 1.2em; } .steps li { margin: .45em 0; }
+  .steps { padding-left: 1.2em; }
+  #meter { flex: 1; min-width: 120px; height: 14px; background: var(--line); border-radius: 7px; overflow: hidden; }
+  #meter i { display: block; height: 100%; width: 0; background: var(--warn); transition: width .08s; }
+  #meter.ok i { background: var(--ok); } .steps li { margin: .45em 0; }
 </style>
 <div id="toasts"></div>
 <div class="wrap">
@@ -26,10 +30,11 @@
     <ol class="steps">
       <li id="stInstall" data-ios="Opcjonalnie: stuknij Udostępnij, potem Do ekranu początkowego. Pełny ekran, nie gaśnie." data-android="Opcjonalnie: stuknij menu (trzy kropki), potem Zainstaluj aplikację." data-other="Opcjonalnie: zainstaluj tę stronę jako aplikację z menu przeglądarki."></li>
       <li id="stRinger" data-ios="Dzwonek WŁĄCZONY: boczny przełącznik nie może pokazywać pomarańczowego (tryb cichy wycisza tę stronę)." data-android="Dźwięk WŁĄCZONY: nie wyciszenie, nie wibracje." data-other="Dźwięk włączony."></li>
-      <li>Głośność na maksimum (wciskaj głośniej, aż przestanie rosnąć).</li>
+      <li>Głośność: stuknij <b>Ton</b> i podgłaśniaj, aż pasek zrobi się zielony.</li>
       <li>Połóż telefon płasko, ekranem do góry, <b>górną krawędzią w stronę prowadzącego</b>. Wszyscy tak samo, wtedy każdy telefon słyszy podobnie.</li>
       <li>Stuknij <b>Test</b> i zezwól na mikrofon. Powinien rozlec się krótki gwizd.</li>
     </ol>
+    <div class="row"><button class="big" id="tone">Ton</button><div id="meter"><i></i></div></div>
     <div class="row"><button class="big" id="test">Test</button><span id="testRes" class="muted"></span></div>
     <label style="display:block;margin-top:12px">Twoje imię <input id="name" size="12" maxlength="24"></label>
     <button class="big" id="go" style="margin-top:12px">Dołącz</button>
@@ -205,7 +210,22 @@ function listen() { // learn the room while nothing flies; while drones fly, rep
   for (const d of JSON.parse(droneKey)) levels[d.id] = +Ranging.combLevel(db, floor, binHz, d.f0).toFixed(1);
   api('levels', { id, levels }).catch(() => {});
 }
-$('#go').onclick = start; $('#test').onclick = test;
+// Ton: 4 s low tone (+ its octave) while a bar shows how loudly my own mic hears it; turn the volume up until green
+async function tone() {
+  try { await prepare(); } catch (e) { prepared = null; $('#err').textContent = 'Mikrofon zablokowany: ' + e.message + '. Zezwól w ustawieniach przeglądarki i odśwież stronę.'; return; }
+  if (ctx.state !== 'running') { $('#err').textContent = 'Dźwięk zablokowany: stuknij Ton jeszcze raz.'; return; }
+  const t = ctx.currentTime + 0.05, g = ctx.createGain(), oscs = [[330, 0.5], [660, 0.25]].map(([f, a]) => { const o = ctx.createOscillator(), og = ctx.createGain(); o.frequency.value = f; og.gain.value = a; o.connect(og); og.connect(g); o.start(t); o.stop(t + 4.05); return o; });
+  g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(0.9, t + 0.1); g.gain.setValueAtTime(0.9, t + 3.9); g.gain.linearRampToValueAtTime(0, t + 4);
+  g.connect(out); $('#tone').disabled = true;
+  const td = new Float32Array(an.fftSize), end = performance.now() + 4200;
+  (function draw() {
+    an.getFloatTimeDomainData(td); let s2 = 0; for (const v of td) s2 += v * v;
+    const db = 20 * Math.log10(Math.sqrt(s2 / td.length) + 1e-9), pct = Math.max(0, Math.min(100, (db + 60) / 50 * 100)); // -60..-10 dBFS
+    $('#meter i').style.width = pct + '%'; $('#meter').classList.toggle('ok', db > -30);
+    if (performance.now() < end) requestAnimationFrame(draw); else { $('#tone').disabled = false; g.disconnect(); }
+  })();
+}
+$('#go').onclick = start; $('#test').onclick = test; $('#tone').onclick = tone;
 document.addEventListener('visibilitychange', () => { if (!document.hidden && ctx) ctx.resume(); });
 </script>
 </html>
