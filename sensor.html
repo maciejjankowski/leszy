@@ -1,6 +1,6 @@
 <!doctype html>
-<html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Wielki Leszy - sensor</title>
+<html lang="pl"><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Wielki Leszy - czujnik</title>
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <link rel="manifest" href="manifest.json">
@@ -18,28 +18,28 @@
   canvas { width: 100%; height: 150px; display: block; background: #020905; border-radius: 10px; }
 </style>
 <div class="wrap">
-  <h1>WIELKI LESZY · SENSOR</h1>
+  <h1>WIELKI LESZY · CZUJNIK</h1>
   <div class="card row">
-    <label>Name <input id="name" size="10" maxlength="24"></label>
+    <label>Nazwa <input id="name" size="10" maxlength="24"></label>
     <span class="muted" id="who"></span>
   </div>
   <div id="start" class="card">
-    <button class="big" id="go">Start listening</button>
-    <p class="muted">Keep this screen on and the phone lying still, screen up. The first 2 s it learns the room's normal sound - stay quiet.</p>
+    <button class="big" id="go">Zacznij słuchać</button>
+    <p class="muted">Nie wygaszaj ekranu, telefon leży nieruchomo ekranem do góry. Przez pierwsze 2 s uczy się zwykłego dźwięku sali: cisza.</p>
     <p id="err" style="color:var(--hot)"></p>
-    <label class="muted"><input type="checkbox" id="selftest"> Self-test: feed a fake drone instead of the microphone</label>
+    <label class="muted"><input type="checkbox" id="selftest"> Autotest: udawany dron zamiast mikrofonu</label>
   </div>
   <div id="run" hidden>
     <div id="status">-</div>
     <div id="bar"><i></i></div>
     <div class="stats">
-      <div><b id="f0">-</b><span class="muted">rotor Hz</span></div>
-      <div><b id="lvl">-</b><span class="muted">level dB</span></div>
-      <div><b id="net">-</b><span class="muted">hub</span></div>
+      <div><b id="f0">-</b><span class="muted">wirnik Hz</span></div>
+      <div><b id="lvl">-</b><span class="muted">poziom dB</span></div>
+      <div><b id="net">-</b><span class="muted">baza</span></div>
     </div>
     <div class="card" id="st" hidden>
-      <div class="row"><span class="muted">fake drone f0</span><input type="range" id="sf" min="120" max="900" value="320"><span id="sfv">320</span></div>
-      <div class="row"><span class="muted">distance</span><input type="range" id="sg" min="0" max="100" value="60"></div>
+      <div class="row"><span class="muted">f0 udawanego drona</span><input type="range" id="sf" min="120" max="900" value="320"><span id="sfv">320</span></div>
+      <div class="row"><span class="muted">odległość</span><input type="range" id="sg" min="0" max="100" value="60"></div>
     </div>
     <canvas id="spec"></canvas>
     <p class="muted" id="place"></p>
@@ -73,7 +73,7 @@ async function start() {
     try {
       // ask for every channel the input has: a DJI receiver in split mode gives one channel per transmitter
       stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false, channelCount: { ideal: 8 } } });
-    } catch (e) { await ctx.close(); $('#err').textContent = 'Microphone blocked: ' + e.message + (isSecureContext ? '' : ' - this page needs https'); return; }
+    } catch (e) { await ctx.close(); $('#err').textContent = 'Mikrofon zablokowany: ' + e.message + (isSecureContext ? '' : ' - ta strona wymaga https'); return; }
     const src = ctx.createMediaStreamSource(stream), track = stream.getAudioTracks ? stream.getAudioTracks()[0] : null, nch = (track && track.getSettings && track.getSettings().channelCount) || 1;
     if (nch > 1) { // each extra channel = its own sensor (same clock, separate detector)
       const split = ctx.createChannelSplitter(nch); src.connect(split); split.connect(hp, 0);
@@ -82,7 +82,7 @@ async function start() {
         const a = ctx.createAnalyser(); a.fftSize = 8192; a.smoothingTimeConstant = 0; split.connect(h, k); h.connect(a);
         extras.push({ k, an: a, det: new CombDetector({ binHz: ctx.sampleRate / a.fftSize }), last: null, buf: new Float32Array(a.frequencyBinCount) });
       }
-      $('#who').textContent = 'id ' + id + ' · ' + nch + ' mic channels';
+      $('#who').textContent = 'id ' + id + ' · ' + nch + ' kan. mikrofonu';
     } else src.connect(hp);
   }
   hp.connect(an);
@@ -99,7 +99,7 @@ async function start() {
   try { lock = await navigator.wakeLock.request('screen'); } catch (e) {}
   $('#start').hidden = true; $('#run').hidden = false;
 }
-function showPaused() { const s = $('#status'); s.className = 'warm'; s.textContent = 'PAUSED - tap to resume'; }
+function showPaused() { const s = $('#status'); s.className = 'warm'; s.textContent = 'PAUZA - stuknij, żeby wznowić'; }
 document.addEventListener('visibilitychange', async () => { // back after a screen lock or app switch
   if (document.hidden || !ctx || ctx.state === 'closed') return;
   try { await ctx.resume(); } catch (e) {}
@@ -131,10 +131,10 @@ async function send() {
     for (const x of extras) if (x.last) fetch('api.php?a=report', { method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ id: id + '-' + x.k, name: ($('#name').value.trim() || id) + ' ch' + (x.k + 1), det: x.last.detected, score: +x.last.score.toFixed(2),
         f0: x.last.f0, level: +x.last.level.toFixed(2), warming: x.last.warming }) }).catch(() => {});
-    $('#place').textContent = j.placed ? 'Placed on the radar. Gain offset ' + j.gain.toFixed(1) + ' dB.' : 'Not placed yet: drag this phone (' + ($('#name').value || id) + ') to its spot on the radar.';
+    $('#place').textContent = j.placed ? 'Na radarze. Korekta czułości ' + j.gain.toFixed(1) + ' dB.' : 'Jeszcze nie na radarze: przeciągnij ten telefon (' + ($('#name').value || id) + ') na jego miejsce.';
   } catch (e) { failCount++; }
   finally { sending = false; } // a hung request times out instead of blocking every later report
-  $('#net').textContent = failCount > 2 ? 'down' : 'ok';
+  $('#net').textContent = failCount > 2 ? 'brak' : 'ok';
   $('#net').style.color = failCount > 2 ? 'var(--hot)' : '';
 }
 
@@ -142,7 +142,7 @@ const cv = $('#spec'), g = cv.getContext('2d');
 function show(o, buf) {
   const s = $('#status');
   s.className = o.detected ? 'det' : o.warming ? 'warm' : '';
-  s.textContent = o.detected ? 'DRONE' : o.warming ? 'LEARNING ROOM' : 'LISTENING';
+  s.textContent = o.detected ? 'DRON' : o.warming ? 'UCZĘ SIĘ SALI' : 'SŁUCHAM';
   $('#bar i').style.width = Math.max(0, Math.min(100, o.score / det.threshold * 50)) + '%';
   $('#f0').textContent = o.detected ? Math.round(o.f0) : '-';
   $('#lvl').textContent = o.level > -139 ? o.level.toFixed(0) : '-';

@@ -1,6 +1,6 @@
 <!doctype html>
-<html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Wielki Leszy - stage</title>
+<html lang="pl"><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Wielki Leszy - scena</title>
 <link rel="stylesheet" href="style.css">
 <style>
   body { overflow: hidden; }
@@ -17,25 +17,25 @@
 <div class="layout">
   <canvas id="cv"></canvas>
   <aside>
-    <h1>WIELKI LESZY · STAGE</h1>
-    <div id="phase">LOBBY</div>
+    <h1>WIELKI LESZY · SCENA</h1>
+    <div id="phase">POCZEKALNIA</div>
     <dl>
-      <dt>phones in</dt><dd id="nIn">0</dd>
-      <dt>mapped</dt><dd id="nMap">-</dd>
-      <dt>map fit</dt><dd id="fit">-</dd>
+      <dt>telefonów</dt><dd id="nIn">0</dd>
+      <dt>na mapie</dt><dd id="nMap">-</dd>
+      <dt>zgodność mapy</dt><dd id="fit">-</dd>
     </dl>
     <div class="tools">
-      <button id="roll">1. Roll call</button>
-      <button id="d1">2. One drone</button>
-      <button id="d3">Three drones</button>
-      <button id="reveal">Reveal</button>
-      <button id="land">Land</button>
-      <button id="reset">Reset</button>
+      <button id="roll">1. Odliczanie</button>
+      <button id="d1">2. Jeden dron</button>
+      <button id="d3">Trzy drony</button>
+      <button id="reveal">Odsłoń</button>
+      <button id="land">Ląduj</button>
+      <button id="reset">Od nowa</button>
     </div>
-    <p class="muted">Join on your phone:</p>
+    <p class="muted">Dołącz telefonem:</p>
     <div id="qr"></div>
     <p class="muted" id="url"></p>
-    <p class="muted">Presenter: open <b>party.html?role=L</b> and <b>?role=R</b> on two devices at the left and right front corners. They turn the map the right way round.</p>
+    <p class="muted">Prowadzący: otwórz <b>party.html?role=L</b> i <b>?role=R</b> na dwóch urządzeniach w lewym i prawym przednim rogu. Dzięki nim mapa nie jest obrócona.</p>
   </aside>
 </div>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
@@ -67,7 +67,7 @@ async function poll() {
   try { data = await (await fetch('party.php?a=data', { cache: 'no-store' })).json(); } catch (e) { return; }
   const p = data.party, live = data.members.filter(m => m.age < 15);
   $('#nIn').textContent = live.length;
-  $('#phase').textContent = { lobby: 'LOBBY · scan to join', rollcall: 'ROLL CALL', mapped: 'MAPPED', drones: 'DRONES IN THE AIR' }[p.phase] || p.phase;
+  $('#phase').textContent = { lobby: 'POCZEKALNIA · zeskanuj kod', rollcall: 'ODLICZANIE', mapped: 'NA MAPIE', drones: 'DRONY W POWIETRZU' }[p.phase] || p.phase;
   // room map from this round's beeps
   const done = data.members.filter(m => m.round === p.round && m.heard);
   if (done.length >= 3) {
@@ -78,7 +78,7 @@ async function poll() {
       const lay = Ranging.layout(used, dists, 200);
       const L = data.members.find(m => m.role === 'L'), R = data.members.find(m => m.role === 'R');
       map = Ranging.orient(lay.pos, L && L.id, R && R.id); fit = lay.rms; mapRound = p.round;
-      $('#nMap').textContent = used.length + ' of ' + p.order.length; $('#fit').textContent = '±' + lay.rms.toFixed(2) + ' m';
+      $('#nMap').textContent = used.length + ' z ' + p.order.length; $('#fit').textContent = '±' + lay.rms.toFixed(2) + ' m';
     }
   }
   // each drone: fix from the levels every listener reports for that drone's pitch
@@ -102,8 +102,8 @@ function draw() {
   const s = Math.min(cv.width, cv.height) / 2 / ext, cx = cv.width / 2, cy = cv.height / 2, P = (x, y) => [cx + (x - mx) * s, cy - (y - my) * s];
   g.font = `${12 * dpr}px ui-monospace, Menlo, monospace`;
   for (let r = 1; r <= ext * 1.5; r += ext > 8 ? 2 : 1) { g.strokeStyle = 'rgba(61,255,138,.13)'; g.beginPath(); g.arc(...P(0, 0), r * s, 0, 7); g.stroke(); }
-  g.fillStyle = 'rgba(183,245,207,.6)'; g.fillText('STAGE', cx - 20 * dpr, 20 * dpr);
-  if (!pts.length) { g.fillStyle = '#5f9a77'; g.font = `${20 * dpr}px ui-monospace, Menlo, monospace`; g.fillText('scan the code, press Join, then Roll call', 30 * dpr, cy); }
+  g.fillStyle = 'rgba(183,245,207,.6)'; g.fillText('SCENA', cx - 20 * dpr, 20 * dpr);
+  if (!pts.length) { g.fillStyle = '#5f9a77'; g.font = `${20 * dpr}px ui-monospace, Menlo, monospace`; g.fillText('zeskanuj kod, stuknij Dołącz, potem Odliczanie', 30 * dpr, cy); }
   const byId = Object.fromEntries(data.members.map(m => [m.id, m]));
   for (const [id, p] of Object.entries(map)) {
     const [x, y] = P(p.x, p.y), m = byId[id] || {}, dr = fixes.find(f => f.id === id);
@@ -124,11 +124,11 @@ function draw() {
     const [x, y] = P(f.fx.x, f.fx.y);
     g.strokeStyle = f.col + '77'; g.lineWidth = 1.5 * dpr; g.setLineDash([3 * dpr, 5 * dpr]); g.beginPath(); g.arc(x, y, Math.max(f.fx.err, 0.4) * s, 0, 7); g.stroke(); g.setLineDash([]); g.lineWidth = 1;
     g.shadowColor = f.col; g.shadowBlur = 20 * dpr; g.fillStyle = f.col; g.beginPath(); g.arc(x, y, (8 + 3 * Math.sin(t * 6)) * dpr, 0, 7); g.fill(); g.shadowBlur = 0;
-    g.fillStyle = '#fff'; g.fillText(`DRONE ${f.f0} Hz · ${f.n} phones`, x + 14 * dpr, y - 10 * dpr);
+    g.fillStyle = '#fff'; g.fillText(`DRON ${f.f0} Hz · telefony: ${f.n}`, x + 14 * dpr, y - 10 * dpr);
     if (revealed && map[f.id]) {
       const [tx, ty] = P(map[f.id].x, map[f.id].y), err = Math.hypot(map[f.id].x - f.fx.x, map[f.id].y - f.fx.y);
       g.setLineDash([4 * dpr, 4 * dpr]); g.strokeStyle = f.col; g.beginPath(); g.moveTo(x, y); g.lineTo(tx, ty); g.stroke(); g.setLineDash([]);
-      g.fillText(`off by ${err.toFixed(1)} m`, (x + tx) / 2 + 8 * dpr, (y + ty) / 2);
+      g.fillText(`pomyłka ${err.toFixed(1)} m`, (x + tx) / 2 + 8 * dpr, (y + ty) / 2);
     }
   }
   requestAnimationFrame(draw);
