@@ -83,6 +83,20 @@
   }
   const soundSpeed = tC => 331.3 + 0.606 * tC; // m/s; 20 C -> 343.4
 
+  // Distances from several rounds at once: per direction A->B take the MEDIAN over rounds of
+  // (A heard B) - (A heard A) - slot gap, so a lone wrong peak in one round cannot move the pair.
+  // rounds: [{ order, slot, heard: {id: {id: t}} }] ; returns the same shape as pairDistances.
+  function medianDistances(ids, rounds, opts = {}) {
+    const c = opts.c || C, off = opts.offset || {}, med = a => { const s = a.filter(Number.isFinite).sort((x, y) => x - y); return s.length ? s[s.length >> 1] : NaN; };
+    const one = (a, b) => med(rounds.map(r => { const H = r.heard[a]; if (!H || !r.order.includes(a) || !r.order.includes(b)) return NaN; return H[b] - H[a] - (r.order.indexOf(b) - r.order.indexOf(a)) * r.slot; }));
+    const out = [];
+    for (let i = 0; i < ids.length; i++) for (let j = i + 1; j < ids.length; j++) {
+      const a = ids[i], b = ids[j], raw = c / 2 * (one(a, b) + one(b, a)); if (!Number.isFinite(raw)) continue;
+      const d = raw + (off[a] || 0) + (off[b] || 0); if (d > -0.3 && d < 60) out.push({ a, b, d: Math.max(d, 0.05), raw });
+    }
+    return out;
+  }
+
   // Per-phone offsets from tape-measured pairs: raw + k_a + k_b = tape. Few pairs -> one shared k for all
   // phones; enough pairs -> least squares per phone, pulled toward the shared k (ridge).
   function fitOffsets(dists, tape) {
@@ -206,6 +220,24 @@
     return { x: p.x, y: p.y, rms: Math.sqrt(rms / obs.length), n: obs.length };
   }
 
+  // Align a new map onto a previous one (best rotation, mirror and shift over the phones both have), so a refit of a room
+  // that did not move draws the same picture. Phones only in the new map are carried along by the same transform.
+  function alignTo(pos, ref) {
+    const ids = Object.keys(pos).filter(id => ref[id]); if (ids.length < 2) return pos;
+    const mean = (P, k) => ids.reduce((s, id) => s + P[id][k], 0) / ids.length;
+    const px = mean(pos, "x"), py = mean(pos, "y"), rx = mean(ref, "x"), ry = mean(ref, "y");
+    let best = null;
+    for (const refl of [1, -1]) {
+      let a = 0, b = 0;
+      for (const id of ids) { const x = pos[id].x - px, y = refl * (pos[id].y - py), u = ref[id].x - rx, v = ref[id].y - ry; a += x * u + y * v; b += x * v - y * u; }
+      const th = Math.atan2(b, a), c = Math.cos(th), s = Math.sin(th);
+      const map = p => { const x = p.x - px, y = refl * (p.y - py); return { x: x * c - y * s + rx, y: x * s + y * c + ry }; };
+      let err = 0; for (const id of ids) { const q = map(pos[id]); err += (q.x - ref[id].x) ** 2 + (q.y - ref[id].y) ** 2; }
+      if (!best || err < best.err) best = { err, map };
+    }
+    return Object.fromEntries(Object.entries(pos).map(([id, p]) => [id, best.map(p)]));
+  }
+
   // Turn the map the right way round: stage-left -> stage-right is the +x axis, stage on top,
   // audience below (the side where most phones are). Without anchors: centre it, leave rotation.
   function orient(pos, left, right) {
@@ -234,6 +266,6 @@
     return p > 0 ? 10 * Math.log10(p) : -140;
   }
 
-  const api = { C, soundSpeed, makeChirp, xcorrEnv, detectFirst, pairDistances, fitOffsets, layout, placeOne, orient, combLevel };
+  const api = { C, soundSpeed, medianDistances, makeChirp, xcorrEnv, detectFirst, pairDistances, fitOffsets, layout, placeOne, alignTo, orient, combLevel };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.Ranging = api;
 })(typeof self !== 'undefined' ? self : this);

@@ -48,6 +48,8 @@
     <p class="muted" id="zeroList" style="font-size:.75em"></p>
     <p class="muted" style="font-size:.75em">Albo: przytrzymaj telefon na mapie, żeby oznaczyć go jako <b>idący</b>. W trybie Ciągle idący piszczy pierwszy, reszta szybko odpowiada (runda ~3 s), mapa reszty stoi, a idący rysuje ślad i odległość od startu. Przesuń go o znaną odległość i porównaj.</p>
     <p class="muted" id="walkInfo" style="font-size:.75em"></p>
+    <p class="muted" style="font-size:.75em"><b>Obchód dotykowy:</b> w trybie Ciągle przyłóż idący telefon do każdego urządzenia na ~3 s. Każdy dotyk kalibruje odległość i głośność tego urządzenia względem idącego.</p>
+    <p class="muted" id="tour" style="font-size:.75em"></p>
     <p class="muted" id="cal" style="font-size:.75em"></p>
     <p class="label">Profil głośności</p>
     <p class="muted" style="font-size:.75em">Względem pierwszego telefonu z par "zero": o ile głośniej gra (głośnik) i słyszy (mikrofon).</p>
@@ -55,7 +57,7 @@
     <p class="label">Odległości</p>
     <p class="muted" style="font-size:.75em">wpisz zmierzoną taśmą, zobaczysz błąd</p>
     <div class="grid" id="pairs"></div>
-    <p class="row" style="margin-top:14px"><a id="selfJoin" target="_blank" rel="noopener">Dołącz tym urządzeniem</a> · <button id="reset">Nowa runda</button></p>
+    <p class="row" style="margin-top:14px"><a id="selfJoin" target="_blank" rel="noopener">Dołącz tym urządzeniem</a> · <button id="reset">Nowa runda</button> · <button id="pileBtn" title="Wszystkie urządzenia na jednym stosie: 3 rundy, baza liczy poprawkę każdego">Stos: kalibruj</button> · <button id="clearCal">Wyczyść kalibrację</button></p>
     <p class="muted" id="url" style="word-break:break-all;font-size:.7em"></p>
   </aside>
 </div>
@@ -78,7 +80,9 @@ $('#go').onclick = () => hub('admin', { cmd: 'rollcall', band: $('#band').value,
   const n = j.party.order.length;
   $('#status').textContent = n < 2 ? 'Potrzeba co najmniej 3 telefonów.' : 'Piszczą... ' + Math.round(n * (+$('#slot').value) + 5) + ' s ciszy';
 });
-$('#reset').onclick = () => { hub('admin', { cmd: 'reset' }); last = ''; walker = null; trail = []; };
+$('#pileBtn').onclick = async () => { pileCal = { rounds: [], need: 3 }; toast('Stos: 3 rundy, nie ruszać'); for (let i = 0; i < 3; i++) { await hub('admin', { cmd: 'rollcall', band: $('#band').value, slot: +$('#slot').value }); await new Promise(r => setTimeout(r, 7000)); } };
+$('#clearCal').onclick = () => { tape = {}; touches = {}; pileOff = {}; store('dp_pileoff', '{}'); store('dp_tape', '{}'); store('dp_touch', '{}'); last = ''; };
+$('#reset').onclick = () => { hub('admin', { cmd: 'reset' }); last = ''; walker = null; trail = []; view = null; target = null; frozen = null; shown = {}; for (const k of Object.keys(filt)) delete filt[k]; };
 let loop = false, loopBusy = false;
 $('#loop').onclick = () => { loop = !loop; $('#loop').classList.toggle('on', loop); if (loop) $('#go').click(); };
 function maybeNextRound(p, done, now) { // continuous mode: next round once this one is in (or 8 s past its end)
@@ -132,21 +136,51 @@ async function poll() {
   }).join('') + '</tr>';
   $('#matrix').innerHTML = ids.length ? h + '</table>' : '<p class="muted">Jeszcze nie było rundy.</p>';
   const heard = Object.fromEntries(done.map(m => [m.id, m.heard])), c = Ranging.soundSpeed(+$('#temp').value || 21), dIds = done.map(m => m.id);
-  const rawD = Ranging.pairDistances(dIds, heard, { c }), notPile = Object.keys(tape).filter(k => tape[k] <= 0.05 && rawD.some(x => x.a + '|' + x.b === k && x.raw > 1));
+  // each member's recent rounds (current + prev ring) -> per-direction medians, so one wrong peak cannot move a pair
+  const hist = {}; for (const m of d.members) { const list = [{ round: m.round, heard: m.heard }, ...(Array.isArray(m.prev) ? m.prev : m.prev && m.prev.round ? [m.prev] : [])]; for (const h of list) if (h && h.heard && h.round > 0) (hist[h.round] = hist[h.round] || { round: h.round, heard: {} }).heard[m.id] = h.heard; }
+  const roundsForMed = Object.values(hist).filter(h => roundMeta[h.round]).map(h => ({ ...h, order: roundMeta[h.round].order, slot: roundMeta[h.round].slot })).sort((a, b) => b.round - a.round).slice(0, MED_N);
+  const rawD = (useMedian && roundsForMed.length >= 2 ? Ranging.medianDistances(dIds, roundsForMed, { c }) : Ranging.pairDistances(dIds, heard, { c })), notPile = Object.keys(tape).filter(k => tape[k] <= 0.05 && rawD.some(x => x.a + '|' + x.b === k && x.raw > 1));
   const tapeOk = Object.fromEntries(Object.entries(tape).filter(([k]) => !notPile.includes(k)));
+  // touch tour: a device touched by the walker reads raw ~ 0 - offset(walker) - offset(device). With the walker as the zero
+  // reference, offset(device) = -raw. Only pair sums matter to the map, so the walker's own gap shifts every device alike.
+  const touchOff = {}; for (const [id, t] of Object.entries(touches)) if (t.walker !== id) touchOff[id] = -t.raw;
   const fit = Ranging.fitOffsets(rawD, tapeOk); // tape-measured pairs -> per-phone speaker-mic offset
-  const offset = Object.fromEntries(dIds.map(i => [i, fit.k[i] ?? fit.shared]));
-  const dists = Ranging.pairDistances(dIds, heard, { c, offset });
+  const offset = Object.fromEntries(dIds.map(i => [i, pileOff[i] ?? touchOff[i] ?? (fit.k[i] ?? fit.shared)])); // pile beats touch beats tape beats shared
+  if (pileCal && !p.walker && done.length >= 3 && !pileCal.rounds.some(r => r.round === p.round) && done.length === p.order.length) {
+    pileCal.rounds.push({ round: p.round, order: p.order, slot: p.slot, heard: Object.fromEntries(done.map(m => [m.id, m.heard])) });
+    if (pileCal.rounds.length >= pileCal.need) { // solve raw(a,b) = 0.05 + k_a + k_b over the pile rounds (medians), then offset = -k
+      const ids2 = p.order, ds = Ranging.medianDistances(ids2, pileCal.rounds, { c }), k = Object.fromEntries(ids2.map(i => [i, 0]));
+      for (let it = 0; it < 300; it++) for (const i of ids2) { let num = 0, den = 0; for (const x of ds) if (x.a === i || x.b === i) { num += (x.raw - 0.05) - k[x.a === i ? x.b : x.a]; den++; } if (den) k[i] = num / den; }
+      let res = 0; for (const x of ds) res += (x.raw - 0.05 - k[x.a] - k[x.b]) ** 2;
+      pileOff = Object.fromEntries(ids2.map(i => [i, -k[i]])); store('dp_pileoff', JSON.stringify(pileOff)); pileCal = null; last = '';
+      toast('Stos gotowy: ' + ids2.map(i => nm(i) + ' ' + (-k[i] * 100).toFixed(0) + ' cm').join(', ') + ' · reszta ' + (Math.sqrt(res / ds.length) * 100).toFixed(0) + ' cm', Math.sqrt(res / ds.length) > 0.3);
+    }
+  }
+  if (p.walker) { // walker rounds: a device the walker touches reads ~0 raw distance. Check this round and each member's previous one.
+    const view = r => d.members.map(m => m.round === r ? { id: m.id, heard: m.heard, lvl: m.lvl } : m.prev && m.prev.round === r ? { id: m.id, heard: m.prev.heard, lvl: m.prev.lvl } : null).filter(Boolean);
+    for (const r of [p.round - 1, p.round]) {
+      const mem = view(r), W = mem.find(m => m.id === p.walker); if (!W || !W.lvl) continue;
+      const hr = Object.fromEntries(mem.map(m => [m.id, m.heard]));
+      for (const x of Ranging.pairDistances(mem.map(m => m.id), hr, { c })) {
+        const other = x.a === p.walker ? x.b : x.b === p.walker ? x.a : null; if (!other || x.raw > 0.15) continue;
+        const D = mem.find(m => m.id === other); if (!D || !D.lvl || (touches[other] && touches[other].round >= r)) continue;
+        touches[other] = { walker: p.walker, raw: x.raw, lvl: { wd: W.lvl[other], dw: D.lvl[p.walker], ww: W.lvl[p.walker], dd: D.lvl[other] }, round: r, t: Date.now() };
+        store('dp_touch', JSON.stringify(touches)); toast('Dotyk: ' + nm(other) + ' (' + (x.raw * 100).toFixed(0) + ' cm)');
+      }
+    }
+  }
+  const dists = useMedian && roundsForMed.length >= 2 ? Ranging.medianDistances(dIds, roundsForMed, { c, offset }) : Ranging.pairDistances(dIds, heard, { c, offset });
+  if (!p.walker) roundMeta[p.round] = { order: p.order, slot: p.slot }; else delete roundMeta[p.round]; // remember each round's order/slot for the medians
 
-  $('#cal').textContent = fit.n ? 'Poprawka z ' + fit.n + ' pomiarów taśmą: ' + (fit.shared * 100).toFixed(0) + ' cm na telefon' + (Object.keys(fit.k).length > 1 && fit.n >= Object.keys(fit.k).length ? ' (osobno dla każdego)' : ' (wspólna)') : 'bez pomiarów taśmą ani stosu';
+  $('#cal').textContent = (Object.keys(pileOff).length ? 'Ze stosu: ' + Object.entries(pileOff).map(([i, v]) => nm(i) + ' ' + (v * 100).toFixed(0) + ' cm').join(', ') + ' · ' : '') + (Object.keys(touchOff).length ? 'Z dotyków: ' + Object.entries(touchOff).map(([i, v]) => nm(i) + ' ' + (v * 100).toFixed(0) + ' cm').join(', ') + ' · ' : '') + (fit.n ? 'Poprawka z ' + fit.n + ' pomiarów taśmą: ' + (fit.shared * 100).toFixed(0) + ' cm na telefon' + (Object.keys(fit.k).length > 1 && fit.n >= Object.keys(fit.k).length ? ' (osobno dla każdego)' : ' (wspólna)') : 'bez pomiarów taśmą ani stosu');
   const used = dIds.filter(i => dists.some(x => x.a === i || x.b === i));
   let lay = null;
   if (p.walker) { // a walker round never refits the room: the still phones keep the frozen map, the walker is placed alone on it
     if (frozen && Object.keys(frozen).filter(i => i !== p.walker).length >= 3) {
       const one = Ranging.placeOne(frozen, dists, p.walker, target && target[p.walker]);
-      lay = { pos: { ...frozen }, rms: one ? one.rms : 0, suspect: [] }; if (one) lay.pos[p.walker] = { x: one.x, y: one.y };
+      lay = { pos: { ...frozen }, rms: one ? one.rms : 0, suspect: [] }; if (one) { lay.pos[p.walker] = { x: one.x, y: one.y }; filt[p.walker] = { x: one.x, y: one.y, n: 1 }; }
     } else lay = target ? { pos: target, rms: 0, suspect: [] } : null;
-  } else if (used.length >= 3) { lay = Ranging.layout(used, dists, { iters: 200, robust: true, init: target }); frozen = { ...lay.pos }; } // full round: springs, warm start
+  } else if (used.length >= 3) { lay = Ranging.layout(used, dists, { iters: 200, robust: true, init: target }); if (target) lay.pos = Ranging.alignTo(lay.pos, target); lay.pos = filterMap(lay.pos, null); frozen = { ...lay.pos }; } // full round: springs, warm start, aligned onto the last map
   const sus = new Set((lay ? lay.suspect : []).map(x => x.a + '|' + x.b));
   $('#pairs').innerHTML = dists.length ? '<table><tr><th>para</th><th>z pisków (m)</th><th>taśma (m)</th><th>błąd</th></tr>' + dists.map(x => {
     const k = x.a + '|' + x.b, t = tape[k], err = t ? x.d - t : null;
@@ -163,8 +197,18 @@ async function poll() {
   // level profile: for a touching pair A,B the beep of A heard by B vs the beep of B heard by A -> speaker and mic
   // differences relative to a reference phone (the first phone of the first zero pair). lvl[x][y] = how loud x heard y.
   const prof = {};
+  const touchIds = Object.keys(touches), refW = touchIds.length ? touches[touchIds[0]].walker : null;
+  if (refW) { // touch tour: every device against the walker, from the stored touch rounds
+    prof[refW] = { spk: 0, mic: 0 };
+    for (const [id, t] of Object.entries(touches)) {
+      const L = t.lvl; if (![L.wd, L.dw, L.ww, L.dd].every(Number.isFinite) || id === refW) continue;
+      // device heard walker: dw = spk(w) + mic(d) + K ; walker heard device: wd = spk(d) + mic(w) + K ; own beeps: ww, dd
+      const dSpkMic = L.wd - L.dw, dOwn = L.dd - L.ww; // (spk(d)-spk(w)) - (mic(d)-mic(w)) ; (spk(d)-spk(w)) + (mic(d)-mic(w))
+      prof[id] = { spk: (dSpkMic + dOwn) / 2, mic: (dOwn - dSpkMic) / 2 };
+    }
+  }
   if (zeros.length) {
-    const ref = zeros[0][0]; prof[ref] = { spk: 0, mic: 0 };
+    const ref = refW && prof[zeros[0][0]] ? zeros[0][0] : zeros[0][0]; if (!prof[ref]) prof[ref] = { spk: 0, mic: 0 };
     for (let pass = 0; pass < 3; pass++) for (const [a, b] of zeros) for (const [x, y] of [[a, b], [b, a]]) {
       if (prof[x] && !prof[y] && by[x] && by[y] && by[x].lvl && by[y].lvl && Number.isFinite(by[x].lvl[y]) && Number.isFinite(by[y].lvl[x]) && Number.isFinite(by[x].lvl[x]) && Number.isFinite(by[y].lvl[y])) {
         // y heard x: lvl[y][x] = spk(x) + mic(y) + K ; x heard y: lvl[x][y] = spk(y) + mic(x) + K ; own beep: lvl[x][x] = spk(x) + mic(x) + K0
@@ -175,11 +219,32 @@ async function poll() {
     }
   }
   $('#profile').innerHTML = Object.keys(prof).length > 1 ? '<table><tr><th>telefon</th><th>głośnik</th><th>mikrofon</th></tr>' + Object.entries(prof).map(([id, v]) => '<tr><td>' + nm(id) + '</td><td>' + (v.spk >= 0 ? '+' : '') + v.spk.toFixed(1) + ' dB</td><td>' + (v.mic >= 0 ? '+' : '') + v.mic.toFixed(1) + ' dB</td></tr>').join('') + '</table>' : '<p class="muted" style="font-size:.75em">Pojawi się po pierwszej parze "zero".</p>';
-  $('#fit').textContent = lay ? 'zgodność ±' + lay.rms.toFixed(2) + ' m' + (sus.size ? ' · odstające pary: ' + sus.size : '') : '';
+  if (walker) { const todo = dIds.filter(i => i !== walker && !touches[i]); $('#tour').innerHTML = 'Dotknięte: ' + (Object.keys(touches).length ? Object.keys(touches).map(nm).join(', ') : 'nic') + (todo.length ? ' · <span style="color:var(--warn)">zostało: ' + todo.map(nm).join(', ') + '</span>' : ' · <span style="color:var(--ok)">wszystkie</span>'); } else $('#tour').textContent = Object.keys(touches).length ? 'Dotknięte: ' + Object.keys(touches).map(nm).join(', ') : '';
+  $('#fit').textContent = lay ? 'zgodność ±' + lay.rms.toFixed(2) + ' m' + (useMedian && roundsForMed.length >= 2 ? ' · mediana z ' + roundsForMed.length + ' rund' : '') + (sus.size ? ' · odstające pary: ' + sus.size : '') : '';
 }
 // the map settles like springs: dots glide from where they were to the new fit; new phones drift in from the middle
-let target = null, shown = {}, names = id => id, dotPos = {}, pile = [];
+let target = null, shown = {}, names = id => id, dotPos = {}, pile = [], view = null;
+const roundMeta = {}, MED_N = 5; let useMedian = true; // medians over the last 5 full rounds
+// Position filter per phone (steady-state Kalman with a deadband): small round-to-round changes are noise and get averaged,
+// a change over DEAD metres is a real move and is taken at once. The walker bypasses it, its trail must stay sharp.
+const filt = {}, DEAD = 0.06, GAIN = 0.35;
+function filterMap(pos, skip) {
+  const out = {};
+  for (const [id, p] of Object.entries(pos)) {
+    const f = filt[id];
+    if (id === skip || !f) { filt[id] = { x: p.x, y: p.y, n: 1 }; out[id] = { x: p.x, y: p.y }; continue; }
+    const d = Math.hypot(p.x - f.x, p.y - f.y);
+    if (d > DEAD) { f.x = p.x; f.y = p.y; f.n = 1; } // real move: snap
+    else { const g = Math.max(GAIN, 1 / (f.n + 1)); f.x += (p.x - f.x) * g; f.y += (p.y - f.y) * g; f.n++; } // noise: average in
+    out[id] = { x: f.x, y: f.y };
+  }
+  for (const id of Object.keys(filt)) if (!pos[id]) delete filt[id];
+  return out;
+}
 let walker = null, trail = [], pressTimer = null, pressed = false, frozen = null;
+let pileCal = null; // { startRound, rounds: [] } while a pile calibration runs
+let pileOff = {}; try { pileOff = JSON.parse(store('dp_pileoff') || '{}'); } catch (e) {} // id -> offset (m) to add
+let touches = {}; try { touches = JSON.parse(store('dp_touch') || '{}'); } catch (e) {} // id -> { walker, raw, lvl: {wd, dw, ww, dd}, round }
 const hitDot = e => { const dpr = devicePixelRatio || 1, px = e.offsetX * dpr, py = e.offsetY * dpr; const h = Object.entries(dotPos).map(([id, p]) => [id, Math.hypot(p.x - px, p.y - py)]).filter(x => x[1] < 22 * dpr).sort((a, b) => a[1] - b[1])[0]; return h ? h[0] : null; };
 $('#map').addEventListener('pointerdown', e => { pressed = false; const id = hitDot(e); if (!id) return; pressTimer = setTimeout(() => { pressed = true; walker = walker === id ? null : id; trail = []; if (walker && target) frozen = { ...target }; last = ''; }, 600); });
 $('#map').addEventListener('pointerup', () => clearTimeout(pressTimer)); $('#map').addEventListener('pointerleave', () => clearTimeout(pressTimer));
@@ -213,8 +278,11 @@ function drawMap(lay, nm) {
   g.font = (13 * dpr) + 'px ui-monospace, Menlo, monospace';
   if (!lay || !Object.keys(lay.pos).length) return;
   const pts = Object.entries(lay.pos), xs = pts.map(p => p[1].x), ys = pts.map(p => p[1].y);
-  const mx = (Math.min(...xs) + Math.max(...xs)) / 2, my = (Math.min(...ys) + Math.max(...ys)) / 2;
-  const ext = Math.max(1, ...pts.map(([, p]) => Math.max(Math.abs(p.x - mx), Math.abs(p.y - my)))) * 1.35, s = Math.min(cv.width, cv.height) / 2 / ext;
+  // view: centre and scale are locked once set; they only grow when a phone would fall off the edge (no swimming on every refit)
+  const cx0 = (Math.min(...xs) + Math.max(...xs)) / 2, cy0 = (Math.min(...ys) + Math.max(...ys)) / 2;
+  const need = Math.max(1, ...pts.map(([, p]) => Math.max(Math.abs(p.x - (view ? view.mx : cx0)), Math.abs(p.y - (view ? view.my : cy0))))) * 1.35;
+  if (!view || need > view.ext) view = { mx: view ? view.mx : cx0, my: view ? view.my : cy0, ext: need };
+  const mx = view.mx, my = view.my, ext = view.ext, s = Math.min(cv.width, cv.height) / 2 / ext;
   g.strokeStyle = 'rgba(61,255,138,.15)'; for (let r = 1; r <= ext * 1.5; r++) { g.beginPath(); g.arc(cv.width / 2, cv.height / 2, r * s, 0, 7); g.stroke(); }
   drawTrail(mx, my, s);
     for (const [id, p] of pts) {
@@ -227,6 +295,7 @@ function drawMap(lay, nm) {
     g.fillStyle = '#d6f5e1'; g.fillText(label, x + 10 * dpr + lw > cv.width ? x - 10 * dpr - lw : x + 10 * dpr, y + 4 * dpr);
   }
 }
-setInterval(poll, 1000); poll(); requestAnimationFrame(frame);
+let pollMs = 1000, pollTimer = setInterval(poll, pollMs); poll(); requestAnimationFrame(frame);
+setInterval(() => { const want = walker ? 250 : 1000; if (want !== pollMs) { pollMs = want; clearInterval(pollTimer); pollTimer = setInterval(poll, want); } }, 500); // walker mode: 4x a second, a 3 s round is never missed
 </script>
 </html>

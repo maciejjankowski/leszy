@@ -14,7 +14,8 @@ $db->exec('CREATE TABLE IF NOT EXISTS kv (k TEXT PRIMARY KEY, v TEXT)');
 $db->exec('CREATE TABLE IF NOT EXISTS members (id TEXT PRIMARY KEY, name TEXT, role TEXT, joined REAL, seen REAL, round INTEGER DEFAULT -1, heard TEXT, levels TEXT, lt REAL)');
 try { $db->exec('ALTER TABLE members ADD COLUMN heading REAL'); } catch (Exception $e) {}
 try { $db->exec('ALTER TABLE members ADD COLUMN snr TEXT'); } catch (Exception $e) {}
-try { $db->exec('ALTER TABLE members ADD COLUMN lvl TEXT'); } catch (Exception $e) {} // how loud each beep arrived (dB) // how clearly each beep was heard // compass heading, degrees
+try { $db->exec('ALTER TABLE members ADD COLUMN lvl TEXT'); } catch (Exception $e) {} // how loud each beep arrived (dB)
+try { $db->exec('ALTER TABLE members ADD COLUMN prev TEXT'); } catch (Exception $e) {} // this member's previous round, so a fast walker round is never missed // how clearly each beep was heard // compass heading, degrees
 
 function out($a) { echo json_encode($a); exit; }
 function body() { return json_decode(file_get_contents('php://input'), true) ?: []; }
@@ -62,8 +63,14 @@ if ($a === 'pose') { // the phone's compass heading (top edge direction)
 
 if ($a === 'heard') { // arrival times of every beep, on the phone's own audio clock
   $b = body(); $id = cleanId($b['id'] ?? '');
-  $db->prepare('UPDATE members SET heard = ?, snr = ?, lvl = ?, round = ?, seen = ? WHERE id = ?')
-     ->execute([json_encode($b['heard'] ?? new stdClass), json_encode($b['snr'] ?? new stdClass), json_encode($b['lvl'] ?? new stdClass), (int)($b['round'] ?? -1), $now, $id]);
+  // prev = this member's last 6 rounds (newest first), so the base can take medians over rounds and never misses a fast walker round
+  $old = $db->prepare('SELECT round, heard, lvl, prev FROM members WHERE id = ?'); $old->execute([$id]); $o = $old->fetch(PDO::FETCH_ASSOC);
+  $hist = $o && $o['prev'] ? json_decode($o['prev'], true) : [];
+  if (isset($hist['round'])) $hist = [$hist]; // old single-object shape
+  if ($o && $o['heard']) array_unshift($hist, ['round' => (int)$o['round'], 'heard' => json_decode($o['heard'], true), 'lvl' => json_decode($o['lvl'] ?? 'null', true)]);
+  $prev = json_encode(array_slice(array_values(array_filter($hist, fn($h) => is_array($h) && isset($h['round']))), 0, 6));
+  $db->prepare('UPDATE members SET heard = ?, snr = ?, lvl = ?, prev = ?, round = ?, seen = ? WHERE id = ?')
+     ->execute([json_encode($b['heard'] ?? new stdClass), json_encode($b['snr'] ?? new stdClass), json_encode($b['lvl'] ?? new stdClass), $prev, (int)($b['round'] ?? -1), $now, $id]);
   out(['ok' => 1]);
 }
 
@@ -78,7 +85,7 @@ if ($a === 'data') { // the stage screen reads everything
   $rows->execute([$now - 120]);
   $m = array_map(fn($r) => ['id' => $r['id'], 'name' => $r['name'], 'role' => $r['role'], 'age' => round($now - $r['seen'], 1),
     'round' => (int)$r['round'], 'heard' => json_decode($r['heard'] ?? 'null', true), 'levels' => json_decode($r['levels'] ?? 'null', true),
-    'lage' => $r['lt'] ? round($now - $r['lt'], 1) : null, 'heading' => $r['heading'] === null ? null : (float)$r['heading'], 'snr' => json_decode($r['snr'] ?? 'null', true), 'lvl' => json_decode($r['lvl'] ?? 'null', true)], $rows->fetchAll(PDO::FETCH_ASSOC));
+    'lage' => $r['lt'] ? round($now - $r['lt'], 1) : null, 'heading' => $r['heading'] === null ? null : (float)$r['heading'], 'snr' => json_decode($r['snr'] ?? 'null', true), 'lvl' => json_decode($r['lvl'] ?? 'null', true), 'prev' => json_decode($r['prev'] ?? 'null', true)], $rows->fetchAll(PDO::FETCH_ASSOC));
   out(['t' => $now * 1000, 'party' => party($db), 'members' => $m, 'stage' => stageHeading($db, $now)]);
 }
 
