@@ -8,11 +8,12 @@ const get = a => fetch(q(a)).then(r => r.json());
 let seed = 5; const rnd = () => ((seed = (seed * 1664525 + 1013904223) >>> 0) / 4294967296);
 
 (async () => {
-  await post('admin', { cmd: 'reset' });
+  if (!process.env.SIM_NORESET) await post('admin', { cmd: 'reset' });
   const seats = [{ x: -3, y: 1, role: 'L', name: 'stage-L' }, { x: 3, y: 1, role: 'R', name: 'stage-R' }];
   const names = ['Ania', 'Bartek', 'Celina', 'Darek', 'Ewa', 'Filip', 'Gosia', 'Hubert', 'Iza', 'Janek', 'Kasia', 'Leon'];
   names.forEach((n, i) => seats.push({ x: -3 + (i % 4) * 2 + (rnd() - 0.5) * 0.4, y: -2 - Math.floor(i / 4) * 1.5, role: 'audience', name: n }));
   seats[3].x = seats[2].x; seats[3].y = seats[2].y; // Ania + Bartek piled together, to test the pile calibration
+  if (process.env.MOVE) { const [i, dx, dy] = process.env.MOVE.split(','); seats[+i].x += +dx; seats[+i].y += +dy; } // a walker
   const ids = seats.map((_, i) => 'sim' + i);
   for (let i = 0; i < seats.length; i++) await post('join', { id: ids[i], name: seats[i].name, role: seats[i].role });
   const rc = await post('admin', { cmd: 'rollcall' });

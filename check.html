@@ -28,7 +28,7 @@
 <div class="layout">
   <main>
     <div id="qrBox"><div id="qr"></div><div id="count">0</div></div>
-    <button class="big" id="go">Start</button>
+    <div class="row"><button class="big" id="go" style="flex:1">Start</button><button id="loop" title="Rundy jedna po drugiej, mapa się odświeża">Ciągle</button></div>
     <p class="muted" id="status" style="text-align:center"></p>
     <details id="settings"><summary>Ustawienia</summary>
       <p class="row"><label>Pasmo pisku <select id="band"><option value="mid">średnie 2-6 kHz: słyszalne, omija ludzi</option><option value="high">wysokie 8-12 kHz</option><option value="quiet">ciche 14-18 kHz: ledwo słyszalne, krótszy zasięg</option></select></label></p>
@@ -46,6 +46,8 @@
     <p class="label">Kalibracja</p>
     <p class="muted" style="font-size:.75em">Połóż 2 lub więcej telefonów na jednym stosie i stuknij je po kolei na mapie: stos kalibruje odległość i głośność. Albo wpisz taśmą 1-2 odległości poniżej.</p>
     <p class="muted" id="zeroList" style="font-size:.75em"></p>
+    <p class="muted" style="font-size:.75em">Albo: przytrzymaj telefon na mapie, żeby oznaczyć go jako <b>idący</b>; w trybie Ciągle rysuje ślad i odległość od startu. Przesuń go o znaną odległość i porównaj.</p>
+    <p class="muted" id="walkInfo" style="font-size:.75em"></p>
     <p class="muted" id="cal" style="font-size:.75em"></p>
     <p class="label">Profil głośności</p>
     <p class="muted" style="font-size:.75em">Względem pierwszego telefonu z par "zero": o ile głośniej gra (głośnik) i słyszy (mikrofon).</p>
@@ -76,7 +78,14 @@ $('#go').onclick = () => hub('admin', { cmd: 'rollcall', band: $('#band').value,
   const n = j.party.order.length;
   $('#status').textContent = n < 2 ? 'Potrzeba co najmniej 3 telefonów.' : 'Piszczą... ' + Math.round(n * (+$('#slot').value) + 5) + ' s ciszy';
 });
-$('#reset').onclick = () => { hub('admin', { cmd: 'reset' }); last = ''; };
+$('#reset').onclick = () => { hub('admin', { cmd: 'reset' }); last = ''; walker = null; trail = []; };
+let loop = false, loopBusy = false;
+$('#loop').onclick = () => { loop = !loop; $('#loop').classList.toggle('on', loop); if (loop) $('#go').click(); };
+function maybeNextRound(p, done, now) { // continuous mode: next round once this one is in (or 8 s past its end)
+  if (!loop || loopBusy || p.phase !== 'rollcall' || !p.round) return;
+  const endMs = p.t0 + p.order.length * p.slot * 1000 + 1500;
+  if (done.length >= p.order.length || now > endMs + 8000) { loopBusy = true; $('#go').click(); setTimeout(() => loopBusy = false, 3000); }
+}
 const store = (k, v) => { try { if (v === undefined) return localStorage.getItem(k); localStorage.setItem(k, v); } catch (e) {} };
 let tape = {}; try { tape = JSON.parse(store('dp_tape') || '{}'); } catch (e) {}
 $('#temp').value = store('dp_temp') || 21; $('#band').value = store('dp_band') || 'high';
@@ -97,7 +106,8 @@ async function poll() {
   const live = d.members.filter(m => m.age < 20), p = d.party;
   $('#count').textContent = live.length;
   const done = d.members.filter(m => m.round === p.round && m.heard);
-  if (p.phase === 'rollcall' && p.round) $('#status').textContent = done.length < p.order.length ? 'wyniki: ' + done.length + ' z ' + p.order.length : '';
+  if (p.phase === 'rollcall' && p.round) $('#status').textContent = (done.length < p.order.length ? 'wyniki: ' + done.length + ' z ' + p.order.length : '') + (loop ? ' · runda ' + p.round : '');
+  maybeNextRound(p, done, d.t);
   const fresh = done.filter(m => !toasted.has(p.round + ':' + m.id)); // results that just arrived
   if (fresh.length) {
     const short = [];
@@ -127,9 +137,14 @@ async function poll() {
   const fit = Ranging.fitOffsets(rawD, tapeOk); // tape-measured pairs -> per-phone speaker-mic offset
   const offset = Object.fromEntries(dIds.map(i => [i, fit.k[i] ?? fit.shared]));
   const dists = Ranging.pairDistances(dIds, heard, { c, offset });
+
   $('#cal').textContent = fit.n ? 'Poprawka z ' + fit.n + ' pomiarów taśmą: ' + (fit.shared * 100).toFixed(0) + ' cm na telefon' + (Object.keys(fit.k).length > 1 && fit.n >= Object.keys(fit.k).length ? ' (osobno dla każdego)' : ' (wspólna)') : 'bez pomiarów taśmą ani stosu';
   const used = dIds.filter(i => dists.some(x => x.a === i || x.b === i));
-  const lay = used.length >= 3 ? Ranging.layout(used, dists, { iters: 200, robust: true, init: target }) : null; // springs, warm start from the last map
+  let lay = null;
+  if (walker && frozen && used.filter(i => i !== walker && frozen[i]).length >= 3) { // walker mode: others frozen, walker placed alone on them
+    const one = Ranging.placeOne(frozen, dists, walker, target && target[walker]);
+    lay = { pos: { ...frozen }, rms: one ? one.rms : 0, suspect: [] }; if (one) lay.pos[walker] = { x: one.x, y: one.y };
+  } else if (used.length >= 3) { lay = Ranging.layout(used, dists, { iters: 200, robust: true, init: target }); frozen = { ...lay.pos }; } // springs, warm start
   const sus = new Set((lay ? lay.suspect : []).map(x => x.a + '|' + x.b));
   $('#pairs').innerHTML = dists.length ? '<table><tr><th>para</th><th>z pisków (m)</th><th>taśma (m)</th><th>błąd</th></tr>' + dists.map(x => {
     const k = x.a + '|' + x.b, t = tape[k], err = t ? x.d - t : null;
@@ -137,6 +152,9 @@ async function poll() {
   }).join('') + '</table>' + (sus.size ? '<p class="muted" style="font-size:.75em">? = odległość odstaje od reszty sieci (pewnie ktoś zasłonił drogę dźwięku); waży mniej.</p>' : '') : '<p class="muted">Potrzeba co najmniej 2 telefonów, które się usłyszały.</p>';
   document.querySelectorAll('input.tape').forEach(i => i.onchange = () => { const v = parseFloat(i.value.replace(',', '.')); if (v > 0) tape[i.dataset.k] = v; else delete tape[i.dataset.k]; store('dp_tape', JSON.stringify(tape)); last = ''; });
   target = lay ? lay.pos : null; names = nm;
+  if (lay && walker && lay.pos[walker] && (!trail.length || trail[trail.length - 1].round !== p.round)) trail.push({ round: p.round, x: lay.pos[walker].x, y: lay.pos[walker].y, t: Date.now() });
+  if (trail.length > 40) trail.shift();
+  $('#walkInfo').textContent = walker ? 'Idzie: ' + nm(walker) + (trail.length > 1 ? ' · od startu ' + (Math.hypot(trail[trail.length - 1].x - trail[0].x, trail[trail.length - 1].y - trail[0].y) * 100).toFixed(0) + ' cm, ostatni krok ' + (Math.hypot(trail[trail.length - 1].x - trail[trail.length - 2].x, trail[trail.length - 1].y - trail[trail.length - 2].y) * 100).toFixed(0) + ' cm' : ' · czekam na kolejne rundy') + ' (przytrzymaj znowu, żeby odznaczyć)' : '';
   const zeros = Object.entries(tape).filter(([, v]) => v <= 0.05).map(([k]) => k.split('|'));
   const pileIds = [...new Set(zeros.flat())];
   $('#zeroList').innerHTML = (notPile.length ? '<span style="color:var(--warn)">Te telefony nie leżą razem (piski mówią ponad 1 m): ' + notPile.map(k => k.split('|').map(nm).join(' + ')).join(', ') + '. Pomijam.</span><br>' : '') + (pileIds.length ? 'Razem na stosie: ' + pileIds.map(nm).join(' + ') + ' <span class="muted">(stuknij telefon, żeby dodać lub zdjąć; stuknij puste miejsce, żeby skończyć)</span>' : '');
@@ -159,7 +177,12 @@ async function poll() {
 }
 // the map settles like springs: dots glide from where they were to the new fit; new phones drift in from the middle
 let target = null, shown = {}, names = id => id, dotPos = {}, pile = [];
-$('#map').addEventListener('click', e => { // tap dots that lie in one pile: 2, 3 or more; every pair in the pile = distance zero
+let walker = null, trail = [], pressTimer = null, pressed = false, frozen = null;
+const hitDot = e => { const dpr = devicePixelRatio || 1, px = e.offsetX * dpr, py = e.offsetY * dpr; const h = Object.entries(dotPos).map(([id, p]) => [id, Math.hypot(p.x - px, p.y - py)]).filter(x => x[1] < 22 * dpr).sort((a, b) => a[1] - b[1])[0]; return h ? h[0] : null; };
+$('#map').addEventListener('pointerdown', e => { pressed = false; const id = hitDot(e); if (!id) return; pressTimer = setTimeout(() => { pressed = true; walker = walker === id ? null : id; trail = []; if (walker && target) frozen = { ...target }; last = ''; }, 600); });
+$('#map').addEventListener('pointerup', () => clearTimeout(pressTimer)); $('#map').addEventListener('pointerleave', () => clearTimeout(pressTimer));
+$('#map').addEventListener('click', e => {
+  if (pressed) { pressed = false; return; } // the long press already acted // tap dots that lie in one pile: 2, 3 or more; every pair in the pile = distance zero
   const dpr = devicePixelRatio || 1, px = e.offsetX * dpr, py = e.offsetY * dpr;
   const hit = Object.entries(dotPos).map(([id, p]) => [id, Math.hypot(p.x - px, p.y - py)]).filter(x => x[1] < 22 * dpr).sort((a, b) => a[1] - b[1])[0];
   if (!hit) { pile = []; last = ''; return; } // tap empty space = done picking
@@ -177,6 +200,12 @@ function frame() {
 }
 function drawMap(lay, nm) {
   dotPos = {};
+  const drawTrail = (mx, my, s) => {
+    if (!walker || trail.length < 2) return;
+    g.strokeStyle = 'rgba(255,194,77,.7)'; g.lineWidth = 2 * dpr; g.setLineDash([4 * dpr, 4 * dpr]); g.beginPath();
+    trail.forEach((p, i) => { const x = cv.width / 2 + (p.x - mx) * s, y = cv.height / 2 - (p.y - my) * s; i ? g.lineTo(x, y) : g.moveTo(x, y); }); g.stroke(); g.setLineDash([]); g.lineWidth = 1;
+    const p0 = trail[0], x0 = cv.width / 2 + (p0.x - mx) * s, y0 = cv.height / 2 - (p0.y - my) * s; g.strokeStyle = '#ffc24d'; g.beginPath(); g.arc(x0, y0, 5 * dpr, 0, 7); g.stroke();
+  };
   const cv = $('#map'), g = cv.getContext('2d'), dpr = devicePixelRatio || 1;
   cv.width = cv.clientWidth * dpr; cv.height = cv.clientHeight * dpr; g.fillStyle = '#020905'; g.fillRect(0, 0, cv.width, cv.height);
   g.font = (13 * dpr) + 'px ui-monospace, Menlo, monospace';
@@ -185,12 +214,13 @@ function drawMap(lay, nm) {
   const mx = (Math.min(...xs) + Math.max(...xs)) / 2, my = (Math.min(...ys) + Math.max(...ys)) / 2;
   const ext = Math.max(1, ...pts.map(([, p]) => Math.max(Math.abs(p.x - mx), Math.abs(p.y - my)))) * 1.35, s = Math.min(cv.width, cv.height) / 2 / ext;
   g.strokeStyle = 'rgba(61,255,138,.15)'; for (let r = 1; r <= ext * 1.5; r++) { g.beginPath(); g.arc(cv.width / 2, cv.height / 2, r * s, 0, 7); g.stroke(); }
+  drawTrail(mx, my, s);
     for (const [id, p] of pts) {
     const x = cv.width / 2 + (p.x - mx) * s, y = cv.height / 2 - (p.y - my) * s;
     dotPos[id] = { x, y };
     const inZero = Object.keys(tape).some(k => tape[k] <= 0.05 && k.split('|').includes(id));
     if (inZero) { g.strokeStyle = 'rgba(255,194,77,.8)'; g.lineWidth = 2 * dpr; g.beginPath(); g.arc(x, y, 13 * dpr, 0, 7); g.stroke(); g.lineWidth = 1; }
-    g.fillStyle = '#3dff8a'; g.beginPath(); g.arc(x, y, 7 * dpr, 0, 7); g.fill();
+    g.fillStyle = id === walker ? '#ffc24d' : '#3dff8a'; g.beginPath(); g.arc(x, y, 7 * dpr, 0, 7); g.fill();
     const label = nm(id).replace(/&amp;/g, '&'), lw = g.measureText(label).width; // near the right edge: label goes left of the dot
     g.fillStyle = '#d6f5e1'; g.fillText(label, x + 10 * dpr + lw > cv.width ? x - 10 * dpr - lw : x + 10 * dpr, y + 4 * dpr);
   }

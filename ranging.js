@@ -188,6 +188,24 @@
     return { pos: Object.fromEntries(ids.map((id, i) => [id, { x: X[i][0], y: X[i][1] }])), rms: Math.sqrt(stress / Math.max(cnt, 1)), suspect };
   }
 
+  // Put one moving phone on a frozen map: minimise sum (|p - q_i| - d_i)^2 over the fixed phones q_i (Gauss-Newton).
+  function placeOne(fixed, dists, id, start) {
+    const obs = dists.filter(x => (x.a === id || x.b === id) && fixed[x.a === id ? x.b : x.a]).map(x => ({ q: fixed[x.a === id ? x.b : x.a], d: x.d }));
+    if (obs.length < 2) return null;
+    let p = start ? { x: start.x, y: start.y } : { x: obs.reduce((s, o) => s + o.q.x, 0) / obs.length, y: obs.reduce((s, o) => s + o.q.y, 0) / obs.length + 0.01 };
+    for (let it = 0; it < 60; it++) {
+      let a11 = 0, a12 = 0, a22 = 0, b1 = 0, b2 = 0;
+      for (const { q, d } of obs) {
+        const dx = p.x - q.x, dy = p.y - q.y, r = Math.hypot(dx, dy) || 1e-6, e = r - d, jx = dx / r, jy = dy / r;
+        a11 += jx * jx; a12 += jx * jy; a22 += jy * jy; b1 -= jx * e; b2 -= jy * e;
+      }
+      const det = a11 * a22 - a12 * a12 || 1e-9, sx = (a22 * b1 - a12 * b2) / det, sy = (a11 * b2 - a12 * b1) / det;
+      p = { x: p.x + sx, y: p.y + sy }; if (Math.hypot(sx, sy) < 1e-4) break;
+    }
+    let rms = 0; for (const { q, d } of obs) rms += (Math.hypot(p.x - q.x, p.y - q.y) - d) ** 2;
+    return { x: p.x, y: p.y, rms: Math.sqrt(rms / obs.length), n: obs.length };
+  }
+
   // Turn the map the right way round: stage-left -> stage-right is the +x axis, stage on top,
   // audience below (the side where most phones are). Without anchors: centre it, leave rotation.
   function orient(pos, left, right) {
@@ -216,6 +234,6 @@
     return p > 0 ? 10 * Math.log10(p) : -140;
   }
 
-  const api = { C, soundSpeed, makeChirp, xcorrEnv, detectFirst, pairDistances, fitOffsets, layout, orient, combLevel };
+  const api = { C, soundSpeed, makeChirp, xcorrEnv, detectFirst, pairDistances, fitOffsets, layout, placeOne, orient, combLevel };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.Ranging = api;
 })(typeof self !== 'undefined' ? self : this);
