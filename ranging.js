@@ -52,14 +52,17 @@
   }
   // First strong arrival in x (not the loudest: reflections can be louder than the direct path).
   // Returns the time in samples from the start of x, with sub-sample interpolation, and an SNR.
-  function detectFirst(x, chirp) {
+  // opts.frac: a candidate must reach this fraction of the loudest peak (0.5 default; lower catches a direct path
+  // quieter than its own bounce). opts.lookMs: how far before the loudest peak to search (10 ms default = 3.4 m of path).
+  function detectFirst(x, chirp, opts = {}) {
+    const thr = opts.frac ?? 0.5, lookMs = opts.lookMs ?? 10;
     const env = xcorrEnv(x, chirp);
     if (!env.length) return null;
     let mi = 0, mv = 0; for (let i = 0; i < env.length; i++) if (env[i] > mv) { mv = env[i]; mi = i; }
     const s = []; for (let i = 0; i < env.length; i += 7) s.push(env[i]); s.sort((a, b) => a - b);
     const snr = mv / (s[s.length >> 1] + 1e-12);
-    let i = Math.max(0, mi - Math.round(0.01 * chirp.sr));
-    while (i < mi && env[i] < 0.5 * mv) i++;
+    let i = Math.max(0, mi - Math.round(lookMs / 1000 * chirp.sr));
+    while (i < mi && env[i] < thr * mv) i++;
     while (i + 1 < env.length && env[i + 1] > env[i]) i++;
     let frac = 0;
     if (i > 0 && i + 1 < env.length) { const y0 = env[i - 1], y1 = env[i], y2 = env[i + 1], den = y0 - 2 * y1 + y2; if (den) frac = 0.5 * (y0 - y2) / den; }

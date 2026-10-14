@@ -33,6 +33,7 @@
     <details id="settings"><summary>Ustawienia</summary>
       <p class="row"><label>Pasmo pisku <select id="band"><option value="mid">średnie 2-6 kHz: słyszalne, omija ludzi</option><option value="high">wysokie 8-12 kHz</option><option value="quiet">ciche 14-18 kHz: ledwo słyszalne, krótszy zasięg</option></select></label></p>
       <p class="row"><label>Temperatura <input id="temp" type="number" step="1" style="width:4em"> °C</label> <span class="muted" id="cspeed"></span></p>
+      <p class="row"><label>Próg pierwszego piku <select id="frac"><option value="0.5">50% (domyślnie)</option><option value="0.3">30%</option><option value="0.2">20%</option><option value="0.1">10%</option></select></label> <span class="muted">niżej = łapie cichszą drogę bezpośrednią przed głośnym odbiciem</span></p>
       <p class="row"><label>Pisk co <select id="slot"><option value="0.5">0,5 s</option><option value="1">1 s</option><option value="2">2 s</option></select></label> <span class="muted">dłuższy odstęp = mniej nakładania się ech</span></p>
     </details>
     <p class="label">Mapa: gdzie są telefony</p>
@@ -76,11 +77,11 @@ const joinUrl = location.href.replace(/check\.html.*$/, 'party.html') + '?room='
   const w = Math.min(260, innerWidth - 80);
   try { new QRCode($('#qr'), { text: u, width: w, height: w }); } catch (e) {}
 })();
-$('#go').onclick = () => hub('admin', { cmd: 'rollcall', band: $('#band').value, slot: walker ? 0.25 : +$('#slot').value, walker: walker || '' }).then(j => {
+$('#go').onclick = () => hub('admin', { cmd: 'rollcall', band: $('#band').value, slot: walker ? 0.25 : +$('#slot').value, walker: walker || '', frac: +$('#frac').value }).then(j => {
   const n = j.party.order.length;
   $('#status').textContent = n < 2 ? 'Potrzeba co najmniej 3 telefonów.' : 'Piszczą... ' + Math.round(n * (+$('#slot').value) + 5) + ' s ciszy';
 });
-$('#pileBtn').onclick = async () => { pileCal = { rounds: [], need: 3 }; toast('Stos: 3 rundy, nie ruszać'); for (let i = 0; i < 3; i++) { await hub('admin', { cmd: 'rollcall', band: $('#band').value, slot: +$('#slot').value }); await new Promise(r => setTimeout(r, 7000)); } };
+$('#pileBtn').onclick = async () => { pileCal = { rounds: [], need: 3 }; toast('Stos: 3 rundy, nie ruszać'); for (let i = 0; i < 3; i++) { await hub('admin', { cmd: 'rollcall', band: $('#band').value, slot: +$('#slot').value, frac: +$('#frac').value }); await new Promise(r => setTimeout(r, 7000)); } };
 $('#clearCal').onclick = () => { tape = {}; touches = {}; pileOff = {}; store('dp_pileoff', '{}'); store('dp_tape', '{}'); store('dp_touch', '{}'); last = ''; };
 $('#reset').onclick = () => { hub('admin', { cmd: 'reset' }); last = ''; walker = null; trail = []; view = null; target = null; frozen = null; shown = {}; for (const k of Object.keys(filt)) delete filt[k]; };
 let loop = false, loopBusy = false;
@@ -96,6 +97,7 @@ $('#temp').value = store('dp_temp') || 21; $('#band').value = store('dp_band') |
 $('#temp').onchange = () => { store('dp_temp', $('#temp').value); last = ''; showSpeed(); };
 $('#band').onchange = () => store('dp_band', $('#band').value);
 $('#slot').value = store('dp_slot') || '0.5'; $('#slot').onchange = () => store('dp_slot', $('#slot').value);
+$('#frac').value = store('dp_frac') || '0.5'; $('#frac').onchange = () => store('dp_frac', $('#frac').value);
 const showSpeed = () => { $('#cspeed').textContent = 'dźwięk ' + Ranging.soundSpeed(+$('#temp').value || 21).toFixed(1) + ' m/s'; }; showSpeed();
 const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
