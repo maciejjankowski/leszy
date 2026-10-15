@@ -13,6 +13,7 @@ Live (PIN-gated beta; the base screen's QR carries the PIN, so guests type nothi
 | Stage screen for the audience demo (drones, reveal) | [stage.html](https://demo.maciejjankowski.com/drone-ear/stage.html) | [stage.html](stage.html) |
 | Radar (4-phone demo) / simulated flight | [radar.html](https://demo.maciejjankowski.com/drone-ear/radar.html), [radar.html?sim](https://demo.maciejjankowski.com/drone-ear/radar.html?sim) | [radar.html](radar.html) |
 | Phone sensor (drone detector) | [sensor.html](https://demo.maciejjankowski.com/drone-ear/sensor.html) | [sensor.html](sensor.html) |
+| Two-mic node (DJI Mic 3 pair, bearing) | [pair.html](https://demo.maciejjankowski.com/drone-ear/pair.html) | [pair.html](pair.html) |
 | Fake drone (synthetic rotor sound) | [emitter.html](https://demo.maciejjankowski.com/drone-ear/emitter.html) | [emitter.html](emitter.html) |
 | Deck, Polish (S = speaker notes) | [drone-ear.html](https://demo.maciejjankowski.com/drone-ear/presentations/drone-ear.html) | [presentations/drone-ear.html](presentations/drone-ear.html) |
 | Deck, English | [drone-ear-en.html](https://demo.maciejjankowski.com/drone-ear/presentations/drone-ear-en.html) | [presentations/drone-ear-en.html](presentations/drone-ear-en.html) |
@@ -94,6 +95,7 @@ Tests: `tests/ranging.test.js` (simulated room with unrelated clocks, playback l
 | `detector.js` | comb detector (shared by phones and tests) |
 | `fusion.js` | level-based localization, Kalman tracker, simulator |
 | `sensor.html` | phone page: mic, detector, reporting, spectrum strip |
+| `pair.html` + `bearing.js` | one node from two mics on one clock (DJI Mic 3 RX in Stereo mode over USB-C: TX1 left, TX2 right): GCC-PHAT with a cross-power gate gives the time difference, spacing gives the bearing (front/back told by the operator). Spacing under 0.3 m, or a rotor's periodic sound makes the lag ambiguous (d < c/2f0). "Zero" = clap equidistant from both mics, removes any difference in radio latency between the transmitters. Test: `node tests/bearing.test.js` |
 | `radar.html` | radar screen, phone placement, calibration |
 | `api.php` | hub: reports, placement, gains, CSV export |
 | `synth.js`, `emitter.html` | synthetic rotor sound for testing |

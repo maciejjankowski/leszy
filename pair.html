@@ -1,0 +1,141 @@
+<!doctype html>
+<html lang="pl"><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Wielki Leszy - węzeł z dwóch mikrofonów</title>
+<link rel="stylesheet" href="style.css">
+<style>
+  .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; text-align: center; margin-top: 10px; }
+  .stats b { display: block; font-size: 1.5em; }
+  canvas { width: 100%; display: block; background: #020905; border-radius: 10px; }
+  #dial { height: 260px; }
+  #spec { height: 110px; margin-top: 8px; }
+  .ch { display: grid; grid-template-columns: 2.2em 1fr 4em 5em; gap: 8px; align-items: center; margin: 4px 0; }
+  .ch i { display: block; height: 8px; background: var(--ok); border-radius: 4px; width: 0; }
+  .ch u { text-decoration: none; padding: 2px 6px; border-radius: 6px; border: 1px solid var(--line); text-align: center; }
+  .ch u.det { background: var(--hot); color: #fff; border-color: var(--hot); }
+  #log { font-size: .8em; max-height: 9em; overflow: auto; white-space: pre; color: var(--dim); }
+</style>
+<div class="wrap">
+  <h1>WIELKI LESZY · WĘZEŁ Z DWÓCH MIKROFONÓW</h1>
+  <p class="muted">Dwa nadajniki DJI na jednym odbiorniku (RX w trybie <b>Stereo</b>: TX1 = lewy, TX2 = prawy, RX po USB-C do komputera) albo dowolne wejście stereo. Jeden zegar, więc różnica czasu dojścia dźwięku daje kierunek. Przód/tył jest nierozróżnialny: to mówisz Ty.</p>
+  <div class="card row">
+    <label>Wejście <select id="dev"><option value="">domyślne</option></select></label>
+    <label>Rozstaw <input id="d" type="number" value="30" min="5" max="200" step="1" style="width:5em"> cm</label>
+    <label>Pasmo <select id="band"><option value="drone">dron 100-2000 Hz</option><option value="wide">szerokie 300-8000 Hz</option></select></label>
+  </div>
+  <p class="muted">Rozstaw do 30 cm: dźwięk wirnika się powtarza co 1/f0, przy większym rozstawie kierunek staje się wieloznaczny (0,3 m jest jednoznaczne do ~570 Hz).</p>
+  <div class="card row">
+    <button class="big" id="go">Start</button>
+    <button id="zero" disabled>Zero: klaśnij na wprost</button>
+    <button id="stop" disabled>Stop</button>
+    <span class="muted" id="who">-</span>
+  </div>
+  <p id="err" style="color:var(--hot)"></p>
+  <div id="run" hidden>
+    <canvas id="dial"></canvas>
+    <div class="stats">
+      <div><b id="ang">-</b><span class="muted">kierunek °</span></div>
+      <div><b id="tau">-</b><span class="muted">Δt ms</span></div>
+      <div><b id="conf">-</b><span class="muted">pewność</span></div>
+      <div><b id="spread">-</b><span class="muted">rozrzut (próbki)</span></div>
+    </div>
+    <div class="card">
+      <div class="ch"><span>L</span><i id="lL"></i><span id="dL" class="muted">-</span><u id="sL">-</u></div>
+      <div class="ch"><span>P</span><i id="lR"></i><span id="dR" class="muted">-</span><u id="sR">-</u></div>
+      <p class="muted" id="cal">Bez zera: zakładam, że oba nadajniki mają tę samą zwłokę radiową. Klaśnij w równej odległości od obu mikrofonów i naciśnij „Zero”, a resztę zwłoki odejmę.</p>
+    </div>
+    <canvas id="spec"></canvas>
+    <div class="card"><div id="log"></div></div>
+  </div>
+  <a href="./">start</a>
+</div>
+<script src="detector.js"></script>
+<script src="bearing.js"></script>
+<script>
+const $ = s => document.querySelector(s);
+const store = (k, v) => { try { if (v === undefined) return localStorage.getItem(k); localStorage.setItem(k, v); } catch (e) {} };
+const N = 8192, HOP = 4096;
+let ctx, stream, node, bufL, bufR, fill = 0, since = 0, lags = [], offset = +(store('dp_pair_zero') || 0), zeroing = null, dets = [], ans = [], specBuf, timer, lastG = null;
+if (offset) $('#cal').textContent = 'Zero z poprzedniego razu: ' + offset.toFixed(1) + ' próbek odjęte. Klaśnij na wprost, żeby ustawić na nowo.';
+
+async function listDevices() {
+  try { const ds = await navigator.mediaDevices.enumerateDevices(); const sel = $('#dev'); const cur = sel.value;
+    sel.innerHTML = '<option value="">domyślne</option>' + ds.filter(d => d.kind === 'audioinput').map(d => `<option value="${d.deviceId}">${d.label || d.deviceId.slice(0, 8)}</option>`).join('');
+    const want = cur || store('dp_pair_dev') || ''; if ([...sel.options].some(o => o.value === want)) sel.value = want;
+    const dji = [...sel.options].find(o => /dji|mic rx|wireless/i.test(o.textContent)); if (!sel.value && dji) sel.value = dji.value;
+  } catch (e) {}
+}
+$('#dev').onchange = () => store('dp_pair_dev', $('#dev').value);
+
+async function start() {
+  $('#err').textContent = '';
+  ctx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 48000 }); await ctx.resume();
+  const c = { echoCancellation: false, noiseSuppression: false, autoGainControl: false, channelCount: { ideal: 2 } };
+  if ($('#dev').value) c.deviceId = { exact: $('#dev').value };
+  try { stream = await navigator.mediaDevices.getUserMedia({ audio: c }); } catch (e) { $('#err').textContent = 'Mikrofon: ' + e.message; await ctx.close(); return; }
+  await listDevices();
+  const track = stream.getAudioTracks()[0], st = track.getSettings ? track.getSettings() : {}, nch = st.channelCount || 1;
+  $('#who').textContent = (track.label || 'wejście') + ' · ' + nch + ' kan. · ' + ctx.sampleRate + ' Hz';
+  if (nch < 2) { $('#err').textContent = 'Wejście jest mono: ustaw odbiornik w tryb Stereo (TX1 lewy, TX2 prawy) i wybierz go z listy.'; }
+  const src = ctx.createMediaStreamSource(stream), split = ctx.createChannelSplitter(2); src.connect(split);
+  dets = []; ans = [];
+  for (let k = 0; k < 2; k++) { const a = ctx.createAnalyser(); a.fftSize = 8192; a.smoothingTimeConstant = 0; split.connect(a, k); ans.push(a); dets.push(new CombDetector({ binHz: ctx.sampleRate / a.fftSize })); }
+  specBuf = new Float32Array(ans[0].frequencyBinCount);
+  await ctx.audioWorklet.addModule('tap-worklet.js');
+  node = new AudioWorkletNode(ctx, 'tap', { numberOfInputs: 1, numberOfOutputs: 0, channelCount: 2, channelCountMode: 'explicit' });
+  src.connect(node);
+  bufL = new Float32Array(N); bufR = new Float32Array(N); fill = 0; since = 0; lags = [];
+  node.port.onmessage = e => {
+    const d = e.data.data, n = d[0].length, r = d[1] || d[0];
+    bufL.copyWithin(0, n); bufL.set(d[0], N - n); bufR.copyWithin(0, n); bufR.set(r, N - n);
+    fill = Math.min(N, fill + n); since += n;
+    if (fill >= N && since >= HOP) { since = 0; analyse(); }
+  };
+  timer = setInterval(() => { for (let k = 0; k < 2; k++) { ans[k].getFloatFrequencyData(specBuf); const o = dets[k].process(specBuf, ctx.currentTime); showCh(k, o); if (k === 0) spectrum(specBuf, o); } }, 100);
+  $('#run').hidden = false; $('#go').disabled = true; $('#zero').disabled = false; $('#stop').disabled = false;
+}
+function analyse() {
+  const d = (+$('#d').value || 30) / 100, band = $('#band').value === 'wide' ? { fmin: 300, fmax: 8000 } : { fmin: 100, fmax: 2000 };
+  const g = Bearing.gccPhat(bufL, bufR, ctx.sampleRate, { maxLag: Bearing.maxLagFor(d, ctx.sampleRate) + 20, ...band });
+  lastG = g; lags.push(g.lag); if (lags.length > 12) lags.shift(); // last ~1 s
+  if (zeroing) { if (g.conf > 2.5) zeroing.push(g.lag); if (zeroing.length >= 8) { offset = Bearing.median(zeroing); store('dp_pair_zero', offset); zeroing = null; $('#zero').textContent = 'Zero: klaśnij na wprost'; $('#cal').textContent = 'Zero ustawione: ' + offset.toFixed(1) + ' próbek = ' + (offset / ctx.sampleRate * 1000).toFixed(2) + ' ms różnicy zwłoki między nadajnikami, odejmowane.'; } }
+  const lag = g.lag - offset, tau = lag / ctx.sampleRate, ang = Bearing.angleOf(tau, d);
+  const med = Bearing.median(lags.map(x => x - offset)), sorted = lags.slice().sort((a, b) => a - b), spread = sorted.length > 3 ? sorted[sorted.length - 1 - (sorted.length >> 2)] - sorted[sorted.length >> 2] : 0;
+  $('#ang').textContent = g.conf > 2 ? (ang > 0 ? '+' : '') + ang.toFixed(0) : '-';
+  $('#tau').textContent = (tau * 1000).toFixed(2); $('#conf').textContent = g.conf.toFixed(1); $('#spread').textContent = spread.toFixed(1);
+  $('#ang').style.color = g.conf > 3 ? 'var(--ok)' : g.conf > 2 ? 'var(--warn)' : 'var(--dim)';
+  dial(Bearing.angleOf(med / ctx.sampleRate, d), ang, g.conf);
+  const L = $('#log'); L.textContent = (new Date().toLocaleTimeString() + '  lag ' + lag.toFixed(1).padStart(6) + '  conf ' + g.conf.toFixed(1).padStart(4) + '  kąt ' + (g.conf > 2 ? ang.toFixed(0) : '-') + '\n' + L.textContent).split('\n').slice(0, 40).join('\n');
+}
+$('#zero').onclick = () => { zeroing = []; $('#zero').textContent = 'Klaśnij teraz...'; };
+function stop() { clearInterval(timer); if (node) node.disconnect(); if (stream) stream.getTracks().forEach(t => t.stop()); if (ctx) ctx.close(); $('#go').disabled = false; $('#zero').disabled = true; $('#stop').disabled = true; }
+function showCh(k, o) {
+  const id = k ? 'R' : 'L', lvl = o.level > -139 ? o.level : -100;
+  $('#l' + id).style.width = Math.max(0, Math.min(100, (lvl + 100) * 1.3)) + '%';
+  $('#d' + id).textContent = o.level > -139 ? o.level.toFixed(0) + ' dB' : '-';
+  const s = $('#s' + id); s.className = o.detected ? 'det' : ''; s.textContent = o.detected ? 'DRON ' + Math.round(o.f0) : o.warming ? 'uczę' : 'cisza';
+}
+const dc = $('#dial'), dg = dc.getContext('2d');
+function dial(medAng, ang, conf) {
+  const W = dc.width = dc.clientWidth * devicePixelRatio, H = dc.height = dc.clientHeight * devicePixelRatio, cx = W / 2, cy = H * 0.82, R = Math.min(W / 2, H * 0.75) - 10 * devicePixelRatio;
+  dg.clearRect(0, 0, W, H); dg.lineWidth = devicePixelRatio;
+  dg.strokeStyle = '#1d4a30'; dg.beginPath(); dg.arc(cx, cy, R, Math.PI, 2 * Math.PI); dg.stroke();
+  for (let a = -90; a <= 90; a += 30) { const t = (a - 90) * Math.PI / 180; dg.beginPath(); dg.moveTo(cx + R * Math.cos(t), cy + R * Math.sin(t)); dg.lineTo(cx + (R - 8 * devicePixelRatio) * Math.cos(t), cy + (R - 8 * devicePixelRatio) * Math.sin(t)); dg.stroke(); }
+  dg.fillStyle = '#5f9a77'; dg.font = `${12 * devicePixelRatio}px ui-monospace, monospace`; dg.textAlign = 'center';
+  dg.fillText('L', cx - R - 14 * devicePixelRatio, cy + 4 * devicePixelRatio); dg.fillText('P', cx + R + 14 * devicePixelRatio, cy + 4 * devicePixelRatio); dg.fillText('przód (albo tył)', cx, cy - R - 10 * devicePixelRatio);
+  // the two mics on the baseline
+  dg.fillStyle = '#b7f5cf'; for (const s of [-1, 1]) { dg.beginPath(); dg.arc(cx + s * 18 * devicePixelRatio, cy, 4 * devicePixelRatio, 0, 7); dg.fill(); }
+  const arrow = (a, col, w) => { const t = (a - 90) * Math.PI / 180; dg.strokeStyle = col; dg.lineWidth = w * devicePixelRatio; dg.beginPath(); dg.moveTo(cx, cy); dg.lineTo(cx + R * 0.95 * Math.cos(t), cy + R * 0.95 * Math.sin(t)); dg.stroke(); };
+  if (conf > 2) arrow(ang, 'rgba(61,255,138,.35)', 2);
+  if (isFinite(medAng)) arrow(medAng, conf > 3 ? '#3dff8a' : conf > 2 ? '#ffc24d' : '#2a5a3c', 4);
+}
+const sc = $('#spec'), sg = sc.getContext('2d');
+function spectrum(buf, o) {
+  const W = sc.width = sc.clientWidth * devicePixelRatio, H = sc.height = sc.clientHeight * devicePixelRatio, bin = dets[0].binHz, n = Math.floor(4000 / bin);
+  const y = v => H - (Math.max(-130, Math.min(-20, v)) + 130) / 110 * H;
+  sg.clearRect(0, 0, W, H); sg.strokeStyle = '#1d4a30'; sg.beginPath(); for (let i = 1; i < n; i++) sg.lineTo(i / n * W, y(dets[0].floor[i])); sg.stroke();
+  sg.strokeStyle = '#3dff8a'; sg.beginPath(); for (let i = 1; i < n; i++) sg.lineTo(i / n * W, y(buf[i])); sg.stroke();
+  if (o.detected) { sg.strokeStyle = 'rgba(255,77,94,.7)'; for (const f of o.teeth) { const x = f / 4000 * W; sg.beginPath(); sg.moveTo(x, 0); sg.lineTo(x, H); sg.stroke(); } }
+}
+$('#go').onclick = start; $('#stop').onclick = stop;
+listDevices();
+</script>
