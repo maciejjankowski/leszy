@@ -65,6 +65,7 @@
     <p class="muted" style="font-size:.75em">wpisz zmierzoną taśmą, zobaczysz błąd</p>
     <div class="grid" id="pairs"></div>
     <p class="row" style="margin-top:14px"><a id="selfJoin" target="_blank" rel="noopener">Dołącz tym urządzeniem</a> · <button id="reset">Nowa runda</button> · <button id="pileBtn" title="Wszystkie urządzenia na jednym stosie: 3 rundy, baza liczy poprawkę każdego">Stos: kalibruj</button> · <button id="clearCal">Wyczyść kalibrację</button></p>
+    <p class="row"><input id="note" placeholder="notatka: układ, taśma, co testuję" size="34"> <button id="saveLog" title="Zapisuje do dziennika na serwerze: odległości z pisków, taśmę, poprawki, notatkę">Zapisz pomiar</button> <span class="muted" id="saved"></span></p>
     <p class="muted" id="url" style="word-break:break-all;font-size:.7em"></p>
   </aside>
 </div>
@@ -88,6 +89,7 @@ $('#go').onclick = () => hub('admin', { cmd: 'rollcall', band: $('#band').value,
   $('#status').textContent = n < 2 ? 'Potrzeba co najmniej 3 telefonów.' : 'Piszczą... ' + Math.round(n * (+$('#slot').value) + 5) + ' s ciszy';
 });
 $('#pileBtn').onclick = async () => { pileCal = { rounds: [], need: 3 }; toast('Stos: 3 rundy, nie ruszać'); for (let i = 0; i < 3; i++) { await hub('admin', { cmd: 'rollcall', band: $('#band').value, slot: +$('#slot').value, frac: +$('#frac').value, gain: +$('#gain').value }); await new Promise(r => setTimeout(r, 7000)); } };
+$('#saveLog').onclick = async () => { if (!lastSnap) { toast('Jeszcze nie ma rundy do zapisania', true); return; } try { await hub('log', { kind: 'map', note: $('#note').value.trim(), ...lastSnap }); $('#saved').textContent = 'zapisano ' + new Date().toLocaleTimeString(); } catch (e) { toast('Nie zapisano: ' + e.message, true); } };
 $('#clearCal').onclick = () => { tape = {}; touches = {}; pileOff = {}; store('dp_pileoff', '{}'); store('dp_tape', '{}'); store('dp_touch', '{}'); last = ''; };
 $('#reset').onclick = () => { hub('admin', { cmd: 'reset' }); last = ''; walker = null; trail = []; view = null; target = null; frozen = null; shown = {}; for (const k of Object.keys(filt)) delete filt[k]; };
 let loop = false, loopBusy = false;
@@ -98,6 +100,7 @@ function maybeNextRound(p, done, now) { // continuous mode: next round once this
   if (done.length >= p.order.length || now > endMs + (p.walker ? 3000 : 8000)) { loopBusy = true; $('#go').click(); setTimeout(() => loopBusy = false, p.walker ? 800 : 3000); }
 }
 const store = (k, v) => { try { if (v === undefined) return localStorage.getItem(k); localStorage.setItem(k, v); } catch (e) {} };
+let lastSnap = null; // what "Zapisz pomiar" sends: the latest fit, for the field log
 let tape = {}; try { tape = JSON.parse(store('dp_tape') || '{}'); } catch (e) {}
 $('#temp').value = store('dp_temp') || 21; $('#band').value = store('dp_band') || 'high';
 $('#temp').onchange = () => { store('dp_temp', $('#temp').value); last = ''; showSpeed(); };
@@ -193,6 +196,9 @@ async function poll() {
     } else lay = target ? { pos: target, rms: 0, suspect: [] } : null;
   } else if (used.length >= 3) { lay = Ranging.layout(used, dists, { iters: 200, robust: true, init: target }); if (target) lay.pos = Ranging.alignTo(lay.pos, target); lay.pos = filterMap(lay.pos, null); frozen = { ...lay.pos }; } // full round: springs, warm start, aligned onto the last map
   const sus = new Set((lay ? lay.suspect : []).map(x => x.a + '|' + x.b));
+  lastSnap = { round: p.round, slot: p.slot, band: p.band, gain: p.gain, tempC: +$('#temp').value || 21, median: useMedian && roundsForMed.length >= 2, rounds: roundsForMed.length, names: Object.fromEntries(dIds.map(i => [i, nm(i)])),
+    pairs: dists.map(x => ({ a: x.a, b: x.b, d: +x.d.toFixed(3), raw: +x.raw.toFixed(3), tape: tape[x.a + '|' + x.b] ?? null, suspect: sus.has(x.a + '|' + x.b) })), offset, pileOff, touchOff, tapeFit: { shared: fit.shared, n: fit.n }, rms: lay ? +lay.rms.toFixed(3) : null,
+    pos: lay ? Object.fromEntries(Object.entries(lay.pos).map(([i, q]) => [i, { x: +q.x.toFixed(2), y: +q.y.toFixed(2) }])) : null, matrix: Object.fromEntries(done.map(m => [m.id, m.snr || null])) };
   $('#pairs').innerHTML = dists.length ? '<table><tr><th>para</th><th>z pisków (m)</th><th>taśma (m)</th><th>błąd</th></tr>' + dists.map(x => {
     const k = x.a + '|' + x.b, t = tape[k], err = t ? x.d - t : null;
     return '<tr' + (sus.has(k) ? ' class="sus" title="odstaje od reszty: pewnie zasłonięta ścieżka"' : '') + '><td>' + nm(x.a) + ' - ' + nm(x.b) + (sus.has(k) ? ' ?' : '') + '</td><td>' + x.d.toFixed(2) + '</td><td><input class="tape" data-k="' + k + '" inputmode="decimal" value="' + (t || '') + '"></td><td>' + (err == null ? '' : (err >= 0 ? '+' : '') + err.toFixed(2)) + '</td></tr>';

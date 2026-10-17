@@ -29,6 +29,9 @@
     <button id="stop" disabled>Stop</button>
     <span class="muted" id="who">-</span>
   </div>
+  <div class="card row">
+    <input id="note" placeholder="notatka: prawdziwy kąt, odległość, co gra" size="30"> <button id="save" disabled>Zapisz pomiar</button> <span class="muted" id="saved"></span>
+  </div>
   <p id="err" style="color:var(--hot)"></p>
   <div id="run" hidden>
     <canvas id="dial"></canvas>
@@ -91,7 +94,7 @@ async function start() {
     if (fill >= N && since >= HOP) { since = 0; analyse(); }
   };
   timer = setInterval(() => { for (let k = 0; k < 2; k++) { ans[k].getFloatFrequencyData(specBuf); const o = dets[k].process(specBuf, ctx.currentTime); showCh(k, o); if (k === 0) spectrum(specBuf, o); } }, 100);
-  $('#run').hidden = false; $('#go').disabled = true; $('#zero').disabled = false; $('#stop').disabled = false;
+  $('#run').hidden = false; $('#go').disabled = true; $('#zero').disabled = false; $('#stop').disabled = false; $('#save').disabled = false;
 }
 function analyse() {
   const d = (+$('#d').value || 30) / 100, band = $('#band').value === 'wide' ? { fmin: 300, fmax: 8000 } : { fmin: 100, fmax: 2000 };
@@ -106,6 +109,12 @@ function analyse() {
   dial(Bearing.angleOf(med / ctx.sampleRate, d), ang, g.conf);
   const L = $('#log'); L.textContent = (new Date().toLocaleTimeString() + '  lag ' + lag.toFixed(1).padStart(6) + '  conf ' + g.conf.toFixed(1).padStart(4) + '  kąt ' + (g.conf > 2 ? ang.toFixed(0) : '-') + '\n' + L.textContent).split('\n').slice(0, 40).join('\n');
 }
+const ROOM = new URLSearchParams(location.search).get('room') || 'test';
+$('#save').onclick = async () => {
+  if (!lastG) return; const d = (+$('#d').value || 30) / 100, med = Bearing.median(lags.map(x => x - offset)), sorted = lags.slice().sort((a, b) => a - b);
+  const body = { kind: 'bearing', note: $('#note').value.trim(), d, offset, sr: ctx.sampleRate, band: $('#band').value, input: $('#who').textContent, lagMed: med, tauMs: med / ctx.sampleRate * 1000, angle: Bearing.angleOf(med / ctx.sampleRate, d), conf: lastG.conf, spread: sorted.length > 3 ? sorted[sorted.length - 1 - (sorted.length >> 2)] - sorted[sorted.length >> 2] : 0, lags: lags.map(x => +x.toFixed(2)) };
+  try { await fetch('party.php?a=log&room=' + ROOM, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }); $('#saved').textContent = 'zapisano ' + new Date().toLocaleTimeString(); } catch (e) { $('#saved').textContent = 'nie zapisano: ' + e.message; }
+};
 $('#zero').onclick = () => { zeroing = []; $('#zero').textContent = 'Klaśnij teraz...'; };
 function stop() { clearInterval(timer); if (node) node.disconnect(); if (stream) stream.getTracks().forEach(t => t.stop()); if (ctx) ctx.close(); $('#go').disabled = false; $('#zero').disabled = true; $('#stop').disabled = true; }
 function showCh(k, o) {

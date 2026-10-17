@@ -46,6 +46,17 @@ function appVersion() { // content hash, not mtime: a deploy that touches only o
 }
 if ($a === 'time') out(['t' => $now * 1000]);
 
+if ($a === 'log') { // field log: one JSON line per saved measurement (tape, pile result, bearing, note), never deleted by reset
+  $b = body(); $b['t'] = date('c'); $b['room'] = $room;
+  file_put_contents($dir . '/log' . ($room !== '' ? '-' . $room : '') . '.jsonl', json_encode($b, JSON_UNESCAPED_UNICODE) . "\n", FILE_APPEND | LOCK_EX);
+  out(['ok' => 1]);
+}
+if ($a === 'logs') { // last n saved measurements, newest last
+  $f = $dir . '/log' . ($room !== '' ? '-' . $room : '') . '.jsonl'; $n = max(1, min(500, (int)($_GET['n'] ?? 50)));
+  $lines = is_file($f) ? array_slice(array_filter(explode("\n", file_get_contents($f))), -$n) : [];
+  out(['n' => count($lines), 'items' => array_map(fn($l) => json_decode($l, true), $lines)]);
+}
+
 if ($a === 'join') {
   $b = body(); $id = cleanId($b['id'] ?? '');
   if ($id === '') out(['error' => 'id']);
