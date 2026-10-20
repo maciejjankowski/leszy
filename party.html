@@ -142,7 +142,7 @@ async function start() {
   try { lock = await navigator.wakeLock.request('screen'); } catch (e) {}
   $('#joinBox').hidden = true; $('#runBox').hidden = false; $('#meName').textContent = name || id;
   say(role ? 'SCENA ' + (role === 'L' ? 'LEWA' : 'PRAWA') : (LOCATE ? 'Jesteś w grze. Czekam na start...' : 'Jesteś w grze. Czekam na odliczanie...'), 'ok', name);
-  setInterval(poll, 1000); setInterval(listen, 250); setInterval(coach, 500);
+  setInterval(poll, 1000); setInterval(listen, 250); setInterval(coach, 500); setInterval(detectTick, 80);
 }
 
 async function setupAudio() {
@@ -222,17 +222,21 @@ function droneMode(p) {
 
 let lastSent = 0;
 let det = null, lastDetSent = 0;
+function detectTick() { // comb detector, 12 frames a second: alarm after 6 frames (0.5 s) of one steady pitch
+  if (!an || roundBusy) return; // the beeps of a roll call are not a rotor
+  if (!det) det = new CombDetector({ binHz: sr / an.fftSize });
+  const db = new Float32Array(an.frequencyBinCount); an.getFloatFrequencyData(db);
+  for (let i = 0; i < db.length; i++) if (!isFinite(db[i])) db[i] = -140;
+  const o = det.process(db, ctx.currentTime);
+  $('#detLine').textContent = o.detected ? 'słyszę wirnik: ' + Math.round(o.f0) + ' Hz, ' + o.level.toFixed(0) + ' dB' : o.warming ? 'uczę się tła sali' : 'nasłuch: cisza';
+  $('#detLine').style.color = o.detected ? 'var(--hot)' : '';
+  if (Date.now() - lastDetSent > 500) { lastDetSent = Date.now(); api('detect', { id, det: o.detected, f0: o.f0, level: o.level, score: o.score, warming: o.warming }).catch(() => {}); }
+}
 function listen() { // learn the room while nothing flies; while drones fly, report each drone's level; always: the comb detector
   if (!an) return;
   const db = new Float32Array(an.frequencyBinCount); an.getFloatFrequencyData(db);
   for (let i = 0; i < db.length; i++) if (!isFinite(db[i])) db[i] = -140;
-  if (!det) det = new CombDetector({ binHz: sr / an.fftSize });
-  if (!roundBusy) { // the beeps of a roll call are not a rotor; skip those seconds
-    const o = det.process(db, ctx.currentTime);
-    $('#detLine').textContent = o.detected ? 'słyszę wirnik: ' + Math.round(o.f0) + ' Hz, ' + o.level.toFixed(0) + ' dB' : o.warming ? 'uczę się tła sali' : 'nasłuch: cisza';
-    $('#detLine').style.color = o.detected ? 'var(--hot)' : '';
-    if (Date.now() - lastDetSent > 500) { lastDetSent = Date.now(); api('detect', { id, det: o.detected, f0: o.f0, level: o.level, score: o.score, warming: o.warming }).catch(() => {}); }
-  }
+
   const flying = droneKey !== '';
   if (!floor) floor = Float32Array.from(db);
   else if (!flying) for (let i = 0; i < db.length; i++) floor[i] += (db[i] - floor[i]) * 0.08;
@@ -262,12 +266,7 @@ async function tone() {
 }
 $('#go').onclick = start; $('#test').onclick = test; $('#tone').onclick = tone;
 // after a hot reload: rejoin by itself (mic permission is already granted for this site; audio may need one tap on iOS, then it says so)
-if (store('dp_joined') === '1' && !LOOP) {
-  $('#joinBox').hidden = true; $('#runBox').hidden = false;
-  say('STUKNIJ, ŻEBY WZNOWIĆ', 'drone', 'po przeładowaniu telefon gra dopiero po dotknięciu ekranu');
-  const once = () => { document.removeEventListener('pointerdown', once); start().catch(() => {}); };
-  document.addEventListener('pointerdown', once);
-}
+if (store('dp_joined') === '1' && !LOOP) start().then(() => { needTap = true; say('Słucham. Stuknij raz, żeby głośnik grał w rundach.', 'ok', ''); }).catch(() => {});
 // a tap on the big status (or anywhere on the page) restarts audio output after an automatic rejoin
 let needTap = false;
 document.addEventListener('pointerdown', async () => {
