@@ -34,6 +34,7 @@
       <p id="gText" style="margin:.2em 0 .6em"></p>
       <div class="row"><button class="big" id="gBtn" hidden></button><button id="gSkip" hidden>Pomiń ten telefon</button><span id="gStat"></span></div>
       <p class="row" id="gRefRow" hidden><label>Węzeł odniesienia <select id="gRef"></select></label></p>
+      <p id="detStatus" style="margin:.4em 0 0;font-weight:600"></p>
     </div>
     <div id="qrBox"><div id="qr"></div><div id="count">0</div></div>
     <details id="settings"><summary>Ręcznie: Start, Ciągle, ustawienia</summary>
@@ -79,6 +80,7 @@
 <div id="toasts"></div>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 <script src="ranging.js"></script>
+<script src="fusion.js"></script>
 <script>
 const $ = s => document.querySelector(s), ROOM = 'test';
 const hub = (a, body) => fetch('party.php?a=' + a + '&room=' + ROOM, body ? { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) } : { cache: 'no-store' }).then(r => r.json());
@@ -101,6 +103,23 @@ $('#clearCal').onclick = () => { tape = {}; touches = {}; pileOff = {}; store('d
 $('#reset').onclick = () => { hub('admin', { cmd: 'reset' }); last = ''; walker = null; trail = []; view = null; target = null; frozen = null; shown = {}; for (const k of Object.keys(filt)) delete filt[k]; };
 let loop = false, loopBusy = false;
 $('#loop').onclick = () => { loop = !loop; $('#loop').classList.toggle('on', loop); if (loop) $('#go').click(); };
+// Detection on the calibrated map: phones that hear a rotor at the same pitch (within 5 %) vote with their level; 3+ placed phones give a fix.
+function detection(d, p) {
+  const now = d.t / 1000, nmOf = i => (p.names && p.names[i]) || (d.members.find(m => m.id === i) || {}).name || i;
+  const fresh = d.members.filter(m => m.det && now - m.det.t < 3);
+  const heard = fresh.filter(m => m.det.det);
+  let f0 = null; if (heard.length) { const fs = heard.map(m => m.det.f0).sort((a, b) => a - b); f0 = fs[fs.length >> 1]; }
+  hearing = heard.filter(m => Math.abs(m.det.f0 - f0) / f0 < 0.05).map(m => m.id);
+  const nodes = hearing.filter(i => target && target[i]).map(i => ({ x: target[i].x, y: target[i].y, level: fresh.find(m => m.id === i).det.level }));
+  const fix = nodes.length >= 3 ? Fusion.localize(nodes) : null;
+  if (fix) { if (!tracker) tracker = new Fusion.Tracker(1); const tr = tracker.update(now, fix); droneFix = { x: tr.x, y: tr.y, err: fix.err, speed: tr.speed, heading: tr.heading, f0, t: now }; }
+  else if (droneFix && now - droneFix.t > 4) { droneFix = null; tracker = null; }
+  const st = $('#detStatus');
+  if (!fresh.length) { st.textContent = ''; return; }
+  st.style.color = hearing.length ? 'var(--hot)' : 'var(--dim)';
+  st.textContent = hearing.length ? 'DRON · słyszy: ' + hearing.map(nmOf).join(', ') + ' · ' + Math.round(f0) + ' Hz' + (droneFix ? ' · namiar (' + droneFix.x.toFixed(1) + ', ' + droneFix.y.toFixed(1) + ') ±' + droneFix.err.toFixed(1) + ' m, ' + droneFix.speed.toFixed(1) + ' m/s' : nodes.length < 3 ? ' · do namiaru potrzeba 3 telefonów z mapy' : '')
+    : 'nasłuch: cisza (' + fresh.length + ' tel.)';
+}
 // Guided flow: one step, one physical instruction, one button. Derived from the same state the rest of the page uses.
 function guide(live, p) {
   const liveIds = live.map(m => m.id), nmOf = i => (p.names && p.names[i]) || (live.find(m => m.id === i) || {}).name || i;
@@ -198,6 +217,7 @@ async function poll() {
     if (short.length > 3) toast('...i jeszcze ' + (short.length - 3) + ' z brakami (tabela obok)', true);
   }
   if (measure && p.round && done.length >= p.order.length && !measure.rounds.includes(p.round)) measure.rounds.push(p.round);
+  detection(d, p);
   guide(live, p);
   const key = JSON.stringify(done.map(m => [m.id, m.round, m.heard])) + JSON.stringify(tape) + $('#temp').value;
   if (key === last) return; last = key;
@@ -347,6 +367,7 @@ let walker = null, trail = [], pressTimer = null, pressed = false, frozen = null
 const joinedAt = {}; // when each member last joined; a new join = reloaded page = stale calibration
 let pileCal = null; // { startRound, rounds: [] } while a pile calibration runs
 let pileRes = null, measure = null, lastResult = ''; // guide state: last pile residual (cm), a 5-round measurement in progress, its result line
+let droneFix = null, tracker = null, hearing = []; // detection shown on the map: who hears a rotor, where the level fit puts it
 let refK = 0.5; // the reference phone's own delay (m), solved from the spread rounds; 0.5 is what iPhones showed on the pile
 let touchCal = null; // { ref, queue: [ids], cur, busy } guided touch calibration: each phone laid next to the reference, two rounds, its offset relative to the reference
 let pileOff = {}; try { pileOff = JSON.parse(store('dp_pileoff') || '{}'); } catch (e) {} // id -> offset (m) to add
@@ -391,11 +412,19 @@ function drawMap(lay, nm) {
   const mx = view.mx, my = view.my, ext = view.ext, s = Math.min(cv.width, cv.height) / 2 / ext;
   g.strokeStyle = 'rgba(31,122,63,.15)'; for (let r = 1; r <= ext * 1.5; r++) { g.beginPath(); g.arc(cv.width / 2, cv.height / 2, r * s, 0, 7); g.stroke(); }
   drawTrail(mx, my, s);
+  if (droneFix) { // level fix: error circle, dot, heading tick, pitch
+    const x = cv.width / 2 + (droneFix.x - mx) * s, y = cv.height / 2 - (droneFix.y - my) * s;
+    g.strokeStyle = 'rgba(198,40,40,.5)'; g.lineWidth = 2 * dpr; g.beginPath(); g.arc(x, y, Math.max(6 * dpr, droneFix.err * s), 0, 7); g.stroke();
+    g.fillStyle = '#c62828'; g.beginPath(); g.arc(x, y, 9 * dpr, 0, 7); g.fill();
+    if (droneFix.speed > 0.2) { const a = droneFix.heading * Math.PI / 180; g.beginPath(); g.moveTo(x, y); g.lineTo(x + Math.sin(a) * 24 * dpr, y - Math.cos(a) * 24 * dpr); g.stroke(); }
+    g.lineWidth = 1; g.fillStyle = '#c62828'; g.fillText('DRON ' + Math.round(droneFix.f0) + ' Hz', x + 12 * dpr, y - 10 * dpr);
+  }
     for (const [id, p] of pts) {
     const x = cv.width / 2 + (p.x - mx) * s, y = cv.height / 2 - (p.y - my) * s;
     dotPos[id] = { x, y };
     const inZero = Object.keys(tape).some(k => tape[k] <= 0.05 && k.split('|').includes(id));
     if (inZero) { g.strokeStyle = 'rgba(168,100,0,.8)'; g.lineWidth = 2 * dpr; g.beginPath(); g.arc(x, y, 13 * dpr, 0, 7); g.stroke(); g.lineWidth = 1; }
+    if (hearing.includes(id)) { g.strokeStyle = '#c62828'; g.lineWidth = 3 * dpr; g.beginPath(); g.arc(x, y, 12 * dpr, 0, 7); g.stroke(); g.lineWidth = 1; }
     g.fillStyle = id === walker ? '#a86400' : '#1f7a3f'; g.beginPath(); g.arc(x, y, 7 * dpr, 0, 7); g.fill();
     const label = nm(id).replace(/&amp;/g, '&'), lw = g.measureText(label).width; // near the right edge: label goes left of the dot
     g.fillStyle = '#111111'; g.fillText(label, x + 10 * dpr + lw > cv.width ? x - 10 * dpr - lw : x + 10 * dpr, y + 4 * dpr);

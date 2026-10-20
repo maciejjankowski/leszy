@@ -44,6 +44,7 @@
   <div id="runBox" hidden>
     <p id="meName" style="text-align:center;font-size:1.6em;font-weight:700;margin:.2em 0"></p>
     <div id="big">Czekam na odliczanie...</div>
+    <p id="detLine" class="muted" style="text-align:center;font-size:1.1em"></p>
     <p id="sub" class="muted"></p>
     <p id="dir" class="muted" style="text-align:center;font-size:1.2em"></p>
   </div>
@@ -53,6 +54,7 @@
   </div>
 </div>
 <script src="ranging.js"></script>
+<script src="detector.js"></script>
 <script src="synth.js"></script>
 <script>
 const $ = s => document.querySelector(s);
@@ -219,10 +221,18 @@ function droneMode(p) {
 }
 
 let lastSent = 0;
-function listen() { // learn the room while nothing flies; while drones fly, report each drone's level
+let det = null, lastDetSent = 0;
+function listen() { // learn the room while nothing flies; while drones fly, report each drone's level; always: the comb detector
   if (!an) return;
   const db = new Float32Array(an.frequencyBinCount); an.getFloatFrequencyData(db);
   for (let i = 0; i < db.length; i++) if (!isFinite(db[i])) db[i] = -140;
+  if (!det) det = new CombDetector({ binHz: sr / an.fftSize });
+  if (!roundBusy) { // the beeps of a roll call are not a rotor; skip those seconds
+    const o = det.process(db, ctx.currentTime);
+    $('#detLine').textContent = o.detected ? 'słyszę wirnik: ' + Math.round(o.f0) + ' Hz, ' + o.level.toFixed(0) + ' dB' : o.warming ? 'uczę się tła sali' : 'nasłuch: cisza';
+    $('#detLine').style.color = o.detected ? 'var(--hot)' : '';
+    if (Date.now() - lastDetSent > 500) { lastDetSent = Date.now(); api('detect', { id, det: o.detected, f0: o.f0, level: o.level, score: o.score, warming: o.warming }).catch(() => {}); }
+  }
   const flying = droneKey !== '';
   if (!floor) floor = Float32Array.from(db);
   else if (!flying) for (let i = 0; i < db.length; i++) floor[i] += (db[i] - floor[i]) * 0.08;

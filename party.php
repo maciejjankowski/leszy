@@ -16,6 +16,7 @@ try { $db->exec('ALTER TABLE members ADD COLUMN heading REAL'); } catch (Excepti
 try { $db->exec('ALTER TABLE members ADD COLUMN snr TEXT'); } catch (Exception $e) {}
 try { $db->exec('ALTER TABLE members ADD COLUMN lvl TEXT'); } catch (Exception $e) {} // how loud each beep arrived (dB)
 try { $db->exec('ALTER TABLE members ADD COLUMN prev TEXT'); } catch (Exception $e) {}
+try { $db->exec('ALTER TABLE members ADD COLUMN det TEXT'); } catch (Exception $e) {} // latest rotor detection from the phone's own comb detector
 try { $db->exec('ALTER TABLE members ADD COLUMN lat TEXT'); } catch (Exception $e) {} // audio latencies the phone reports // this member's previous round, so a fast walker round is never missed // how clearly each beep was heard // compass heading, degrees
 
 function out($a) { echo json_encode($a); exit; }
@@ -92,6 +93,11 @@ if ($a === 'heard') { // arrival times of every beep, on the phone's own audio c
   out(['ok' => 1]);
 }
 
+if ($a === 'detect') { // the phone's comb detector: is a rotor audible, at what pitch, how loud
+  $b = body(); $id = cleanId($b['id'] ?? '');
+  $db->prepare('UPDATE members SET det = ?, seen = ? WHERE id = ?')->execute([json_encode(['det' => !empty($b['det']), 'f0' => (float)($b['f0'] ?? 0), 'level' => (float)($b['level'] ?? -140), 'score' => (float)($b['score'] ?? 0), 'warming' => !empty($b['warming']), 't' => $now]), $now, $id]);
+  out(['ok' => 1]);
+}
 if ($a === 'levels') { // how loud this phone hears each drone's known pitch
   $b = body(); $id = cleanId($b['id'] ?? '');
   $db->prepare('UPDATE members SET levels = ?, lt = ?, seen = ? WHERE id = ?')->execute([json_encode($b['levels'] ?? new stdClass), $now, $now, $id]);
@@ -103,7 +109,7 @@ if ($a === 'data') { // the stage screen reads everything
   $rows->execute([$now - 120]);
   $m = array_map(fn($r) => ['id' => $r['id'], 'name' => $r['name'], 'role' => $r['role'], 'age' => round($now - $r['seen'], 1), 'joined' => (float)$r['joined'],
     'round' => (int)$r['round'], 'heard' => json_decode($r['heard'] ?? 'null', true), 'levels' => json_decode($r['levels'] ?? 'null', true),
-    'lage' => $r['lt'] ? round($now - $r['lt'], 1) : null, 'heading' => $r['heading'] === null ? null : (float)$r['heading'], 'snr' => json_decode($r['snr'] ?? 'null', true), 'lvl' => json_decode($r['lvl'] ?? 'null', true), 'prev' => json_decode($r['prev'] ?? 'null', true), 'lat' => json_decode($r['lat'] ?? 'null', true)], $rows->fetchAll(PDO::FETCH_ASSOC));
+    'lage' => $r['lt'] ? round($now - $r['lt'], 1) : null, 'heading' => $r['heading'] === null ? null : (float)$r['heading'], 'snr' => json_decode($r['snr'] ?? 'null', true), 'lvl' => json_decode($r['lvl'] ?? 'null', true), 'prev' => json_decode($r['prev'] ?? 'null', true), 'lat' => json_decode($r['lat'] ?? 'null', true), 'det' => json_decode($r['det'] ?? 'null', true)], $rows->fetchAll(PDO::FETCH_ASSOC));
   out(['t' => $now * 1000, 'party' => party($db), 'members' => $m, 'stage' => stageHeading($db, $now)]);
 }
 
