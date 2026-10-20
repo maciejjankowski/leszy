@@ -26,10 +26,15 @@
       if (!this.floor) { this.floor = Float32Array.from(db, v => (isFinite(v) ? v : -140)); this.lastT = t; this.t0 = t; }
       const warming = t - this.t0 < this.warmSec;
       const dt = Math.min(Math.max(t - this.lastT, 0.001), 1); this.lastT = t;
+      // baseline per bin = the lower of (a) the slowly learned room floor and (b) the median of the neighbouring bins right now.
+      // (b) keeps a drone visible that was already flying when the phone started: its teeth stand above their own gaps
+      // even after the room floor has learned them in.
+      const top = Math.min(n, Math.ceil(this.fHarmMax / bin) + 12), W = 8, loc = new Float32Array(n).fill(-140), win = [];
+      for (let i = 0; i < top; i++) { win.length = 0; for (let j = Math.max(1, i - W); j <= Math.min(top - 1, i + W); j++) win.push(isFinite(db[j]) ? db[j] : -140); win.sort((x, y) => x - y); loc[i] = win[win.length >> 1]; }
       const r = new Float32Array(n);
       for (let i = 0; i < n; i++) {
-        const v = isFinite(db[i]) ? db[i] : -140;
-        r[i] = Math.min(Math.max(v - this.floor[i], 0), 25); // dB above the floor, capped so nothing dominates
+        const v = isFinite(db[i]) ? db[i] : -140, base = i < top ? Math.min(this.floor[i], loc[i]) : this.floor[i];
+        r[i] = Math.min(Math.max(v - base, 0), 25); // dB above the baseline, capped so nothing dominates
       }
       const peak = (f) => { const c = Math.round(f / bin); let m = -1; for (let b = c - 1; b <= c + 1; b++) if (b > 0 && b < n && r[b] > m) m = r[b]; return m; };
 

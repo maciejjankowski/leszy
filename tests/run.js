@@ -56,6 +56,11 @@ function runDetector(segments) {
   check('detector: alarms on rotor comb', firstHit >= 0 && firstHit <= 10, `first hit frame ${firstHit} (${(firstHit * HOP / SR).toFixed(2)} s), score ${drone[drone.length - 1].score.toFixed(1)}`);
   check('detector: f0 within 2%', f0s.length && f0s.every(f => Math.abs(f - 430) / 430 < 0.02), `f0=${[...new Set(f0s)].join(',')}`);
 }
+{ // field 2026-10-20: the drone was already flying when the phones started, the room floor learned it in; must still be caught
+  const r = runDetector([{ name: 'drone', frames: 150, f0: 430, amp: 0.01 }]);
+  const late = r.slice(100); // after 100 frames (~4 s) the floor has fully absorbed the comb
+  check('detector: drone present from the start, still caught after the floor learned it', late.filter(o => o.detected).length > late.length * 0.8, 'detected ' + late.filter(o => o.detected).length + ' of ' + late.length);
+}
 { // a quieter drone (half amplitude, -6 dB) is still caught
   const r = runDetector([{ name: 'quiet', frames: 60 }, { name: 'drone', frames: 20, f0: 250, amp: 0.005 }]);
   check('detector: catches a quieter drone', r.some(o => o.phase === 'drone' && o.detected), 'last score ' + r[r.length - 1].score.toFixed(1));
