@@ -39,6 +39,11 @@
   <div id="run" hidden>
     <div id="vote">nasłuch: cisza</div>
     <canvas id="dial"></canvas>
+    <div class="card" id="triBox" hidden>
+      <p class="muted" style="margin:0 0 6px">Trójkąt 1 m: L i P na podstawie, mikrofon 3 na wierzchołku. Najpierw: dron zawisa w środku trójkąta, naciśnij <b>Wyrównaj</b>.</p>
+      <div class="row"><button id="eq">Wyrównaj (dron w środku)</button><span class="muted" id="eqInfo"></span></div>
+      <canvas id="tri" style="height:260px;margin-top:8px"></canvas>
+    </div>
     <div class="stats">
       <div><b id="ang">-</b><span class="muted">kierunek °</span></div>
       <div><b id="tau">-</b><span class="muted">Δt ms</span></div>
@@ -58,12 +63,14 @@
 </div>
 <script src="detector.js"></script>
 <script src="bearing.js"></script>
+<script src="fusion.js"></script>
 <script>
 const $ = s => document.querySelector(s);
 const store = (k, v) => { try { if (v === undefined) return localStorage.getItem(k); localStorage.setItem(k, v); } catch (e) {} };
 const N = 8192, HOP = 4096;
 let voteT = -9, voteF = 0, voteL = -140;
-let stream3 = null;
+let stream3 = null, gainCal = JSON.parse(store('dp_tri_gain') || '[0,0,0]'), eqBuf = null, triFix = null, triTrack = null;
+const TRI = [{ x: 0, y: 0 }, { x: 1, y: 0 }, { x: 0.5, y: 0.866 }]; // L, P, 3: equilateral, 1 m sides
 let ctx, stream, node, bufL, bufR, fill = 0, since = 0, lags = [], offset = +(store('dp_pair_zero') || 0), zeroing = null, dets = [], ans = [], specBuf, timer, lastG = null;
 if (offset) $('#cal').textContent = 'Zero z poprzedniego razu: ' + offset.toFixed(1) + ' próbek odjęte. Klaśnij na wprost, żeby ustawić na nowo.';
 
@@ -101,7 +108,7 @@ async function start() {
     try {
       stream3 = await navigator.mediaDevices.getUserMedia({ audio: { deviceId: { exact: $('#dev3').value }, echoCancellation: false, noiseSuppression: false, autoGainControl: false } });
       const a = ctx.createAnalyser(); a.fftSize = 8192; a.smoothingTimeConstant = 0; ctx.createMediaStreamSource(stream3).connect(a); ans.push(a); dets.push(new CombDetector({ binHz: ctx.sampleRate / a.fftSize }));
-      $('#row3').hidden = false; $('#who').textContent += ' + ' + stream3.getAudioTracks()[0].label;
+      $('#row3').hidden = false; $('#triBox').hidden = false; $('#d').value = 100; $('#who').textContent += ' + ' + stream3.getAudioTracks()[0].label;
     } catch (e) { $('#err').textContent = 'Mikrofon 3: ' + e.message; }
   }
   await ctx.audioWorklet.addModule('tap-worklet.js');
@@ -123,6 +130,13 @@ async function start() {
     for (let i = 0; i < os.length; i++) for (let j = i + 1; j < os.length; j++) { const a = os[i], b = os[j]; if (a.f0 && b.f0 && a.score > th && b.score > th && Math.abs(a.f0 - b.f0) / Math.max(a.f0, b.f0) < 0.03) pairF = (a.f0 + b.f0) / 2; }
     const single = os.find(o => o.detected);
     if (pairF || single) { voteT = ctx.currentTime; voteF = pairF || single.f0; voteL = Math.max(...os.map(o => o.level)); }
+    if (os.length === 3 && (pairF || single)) {
+      const f = voteF, lv = os.map((o, k) => (o.f0 && Math.abs(o.f0 - f) / f < 0.05 && o.level > -130 ? o.level - gainCal[k] : null));
+      if (eqBuf) { if (lv.every(x => x != null)) eqBuf.push(os.map(o => o.level)); if (eqBuf.length >= 15) { const med = k => Bearing.median(eqBuf.map(r => r[k])); const m = [med(0), med(1), med(2)], avg = (m[0] + m[1] + m[2]) / 3; gainCal = m.map(x => x - avg); store('dp_tri_gain', JSON.stringify(gainCal)); eqBuf = null; $('#eqInfo').textContent = 'poprawki: ' + gainCal.map(x => x.toFixed(1)).join(' / ') + ' dB'; } }
+      if (lv.every(x => x != null)) { const fx = Fusion.localize(TRI.map((p, k) => ({ x: p.x, y: p.y, level: lv[k] }))); if (fx) { if (!triTrack) triTrack = new Fusion.Tracker(1); const tr = triTrack.update(ctx.currentTime, fx); triFix = { x: tr.x, y: tr.y, err: fx.err, t: ctx.currentTime }; } }
+    }
+    if (triFix && ctx.currentTime - triFix.t > 3) { triFix = null; triTrack = null; }
+    if (!$('#triBox').hidden) drawTri();
     const on = ctx.currentTime - voteT < 1.5, v = $('#vote');
     v.className = on ? 'det' : ''; v.textContent = on ? 'DRON · ' + Math.round(voteF) + ' Hz · ' + voteL.toFixed(0) + ' dB' : 'nasłuch: cisza';
   }, 100);
@@ -158,6 +172,18 @@ function showCh(k, o) {
   $('#l' + id).style.width = Math.max(0, Math.min(100, (lvl + 100) * 1.3)) + '%';
   $('#d' + id).textContent = o.level > -139 ? o.level.toFixed(0) + ' dB' : '-';
   const s = $('#s' + id); s.className = o.detected ? 'det' : ''; s.textContent = o.detected ? 'DRON ' + Math.round(o.f0) : o.warming ? 'uczę' : 'cisza';
+}
+$('#eq').onclick = () => { eqBuf = []; $('#eqInfo').textContent = 'zbieram 15 odczytów, dron w środku...'; };
+if (gainCal.some(x => x)) $('#eqInfo').textContent = 'poprawki z poprzedniego razu: ' + gainCal.map(x => x.toFixed(1)).join(' / ') + ' dB';
+function drawTri() {
+  const c = $('#tri'), g = c.getContext('2d'), dpr = devicePixelRatio || 1, W = c.width = c.clientWidth * dpr, H = c.height = c.clientHeight * dpr;
+  const ext = 3, s = Math.min(W, H) / (2 * ext), cx = W / 2, cy = H / 2, P = (x, y) => [cx + (x - 0.5) * s, cy - (y - 0.289) * s];
+  g.clearRect(0, 0, W, H); g.strokeStyle = 'rgba(0,0,0,.12)'; for (let r = 1; r <= ext; r++) { g.beginPath(); g.arc(cx, cy, r * s, 0, 7); g.stroke(); }
+  g.strokeStyle = '#bdbab2'; g.beginPath(); TRI.forEach((p, i) => { const [x, y] = P(p.x, p.y); i ? g.lineTo(x, y) : g.moveTo(x, y); }); g.closePath(); g.stroke();
+  g.font = (12 * dpr) + 'px -apple-system, sans-serif';
+  TRI.forEach((p, i) => { const [x, y] = P(p.x, p.y); g.fillStyle = '#1f7a3f'; g.beginPath(); g.arc(x, y, 6 * dpr, 0, 7); g.fill(); g.fillStyle = '#111'; g.fillText(['L', 'P', '3'][i], x + 8 * dpr, y + 4 * dpr); });
+  if (lastG && lastG.conf > 3) { const d = (+$('#d').value || 100) / 100, a = Bearing.angleOf(Bearing.median(lags.map(x => x - offset)) / ctx.sampleRate, d) * Math.PI / 180, [x, y] = P(0.5, 0); for (const sgn of [1, -1]) { g.strokeStyle = sgn > 0 ? 'rgba(31,95,179,.6)' : 'rgba(31,95,179,.2)'; g.beginPath(); g.moveTo(x, y); g.lineTo(x + Math.sin(a) * ext * s, y - sgn * Math.cos(a) * ext * s); g.stroke(); } } // bearing ray from the L-P midpoint; faint = the mirror side
+  if (triFix) { const [x, y] = P(triFix.x, triFix.y); g.strokeStyle = 'rgba(198,40,40,.5)'; g.beginPath(); g.arc(x, y, Math.max(6 * dpr, triFix.err * s), 0, 7); g.stroke(); g.fillStyle = '#c62828'; g.beginPath(); g.arc(x, y, 8 * dpr, 0, 7); g.fill(); g.fillText('DRON (' + triFix.x.toFixed(1) + ', ' + triFix.y.toFixed(1) + ') m', x + 10 * dpr, y - 8 * dpr); }
 }
 const dc = $('#dial'), dg = dc.getContext('2d');
 function dial(medAng, ang, conf) {
