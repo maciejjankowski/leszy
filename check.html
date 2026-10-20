@@ -32,7 +32,7 @@
       <p class="muted" id="gStep" style="margin:0"></p>
       <h2 id="gTitle" style="margin:.15em 0 .3em;font-size:1.2em"></h2>
       <p id="gText" style="margin:.2em 0 .6em"></p>
-      <div class="row"><button class="big" id="gBtn" hidden></button><button id="gSkip" hidden>Pomiń ten telefon</button><span id="gStat"></span></div>
+      <div class="row"><button class="big" id="gBtn" hidden></button><button id="gSkip" hidden>Pomiń ten telefon</button><button id="gDetect" class="big" hidden style="border-color:var(--hot);color:var(--hot)">Detekcja dronów</button><span id="gStat"></span></div>
       <p class="row" id="gRefRow" hidden><label>Węzeł odniesienia <select id="gRef"></select></label></p>
       <p id="detStatus" style="margin:.4em 0 0;font-weight:600"></p>
     </div>
@@ -105,7 +105,7 @@ let loop = false, loopBusy = false;
 $('#loop').onclick = () => { loop = !loop; $('#loop').classList.toggle('on', loop); if (loop) $('#go').click(); };
 // Detection on the calibrated map: phones that hear a rotor at the same pitch (within 5 %) vote with their level; 3+ placed phones give a fix.
 function detection(d, p) {
-  const now = d.t / 1000, nmOf = i => (p.names && p.names[i]) || (d.members.find(m => m.id === i) || {}).name || i;
+  const now = d.t / 1000; p.now = now; const nmOf = i => (p.names && p.names[i]) || (d.members.find(m => m.id === i) || {}).name || i;
   const fresh = d.members.filter(m => m.det && now - m.det.t < 3);
   const heard = fresh.filter(m => m.det.det);
   let f0 = null; if (heard.length) { const fs = heard.map(m => m.det.f0).sort((a, b) => a - b); f0 = fs[fs.length >> 1]; }
@@ -128,6 +128,15 @@ function guide(live, p) {
   let step, title, text, btn = null, stat = '', act = null, skip = false;
   $('#gRefRow').hidden = !(live.length >= 3 && uncal.length && !touchCal);
   if (!touchCal) { const sel = $('#gRef'); const have = [...sel.options].map(o => o.value).join(','); if (have !== liveIds.join(',')) { sel.innerHTML = liveIds.map(i => '<option value="' + i + '">' + nmOf(i) + '</option>').join(''); if (liveIds.includes(ref)) sel.value = ref; } }
+  if (detectMode) {
+    step = 4; title = hearing.length ? 'DRON' : 'DETEKCJA: nasłuch'; btn = 'Wróć do kalibracji'; act = () => { detectMode = false; store('dp_mode', ''); last = ''; };
+    text = hearing.length ? $('#detStatus').textContent : 'Telefony leżą na swoich miejscach i słuchają. Czerwony pierścień = słyszy wirnik; namiar, gdy słyszą 3 z mapy.';
+    stat = 'słucha: ' + live.filter(m => m.det && (p.now || Date.now() / 1000) - m.det.t < 3).length + ' z ' + live.length;
+    $('#gRefRow').hidden = true; $('#gSkip').hidden = true;
+    $('#gStep').textContent = 'TRYB: DETEKCJA'; $('#gTitle').textContent = title; $('#gTitle').style.color = hearing.length ? 'var(--hot)' : ''; $('#gText').textContent = text; $('#gStat').textContent = stat;
+    const b = $('#gBtn'); b.hidden = false; b.textContent = btn; b.onclick = act; return;
+  }
+  $('#gTitle').style.color = '';
   if (live.length < 3) { step = 1; title = 'Dołącz telefony'; text = 'Każdy telefon: zeskanuj kod niżej, wpisz imię, stuknij Dołącz, potem Ton i podgłaśniaj, aż pasek będzie zielony. Potrzeba co najmniej 3.'; stat = 'dołączyło: ' + live.length; }
   else if (touchCal && touchCal.busy) { step = 2; title = 'Mierzę: ' + nmOf(touchCal.cur) + ' przy ' + nmOf(touchCal.ref); text = 'Nie ruszać. Dwie rundy, około 25 s.'; stat = 'runda ' + touchCal.busy + ' z 2'; }
   else if (touchCal || uncal.length) {
@@ -142,6 +151,7 @@ function guide(live, p) {
   else { step = 3; title = 'Rozstaw telefony i zmierz'; text = 'Ustaw telefony w zadanym rozstawie (np. 50 cm między sąsiadami). Taśmą zmierz 2-3 pary i wpisz je w tabeli "Odległości" po prawej. Naciśnij Mierz: 5 rund, wynik i zapis do dziennika. Potem zmień rozstaw i powtórz.'; btn = 'Mierz (5 rund)'; act = runMeasure; stat = lastResult || (pileRes != null ? String(pileRes) : ''); }
   $('#gStep').textContent = 'KROK ' + step + ' z 3'; $('#gTitle').textContent = title; $('#gText').textContent = text; $('#gStat').textContent = stat;
   const b = $('#gBtn'); b.hidden = !btn; if (btn) { b.textContent = btn; b.onclick = act; }
+  const go = $('#gDetect'); go.hidden = !(step === 3 && !measure); go.onclick = () => { detectMode = true; store('dp_mode', 'detect'); last = ''; };
   const sk = $('#gSkip'); sk.hidden = !skip; sk.onclick = () => { if (!touchCal) return; touchCal.queue.shift(); touchCal.cur = touchCal.queue[0]; if (!touchCal.cur) touchCal = null; last = ''; };
 }
 // one phone next to the reference: two rounds, raw two-way distance ref-phone, offset relative to the reference (which counts as zero)
@@ -367,7 +377,7 @@ let walker = null, trail = [], pressTimer = null, pressed = false, frozen = null
 const joinedAt = {}; // when each member last joined; a new join = reloaded page = stale calibration
 let pileCal = null; // { startRound, rounds: [] } while a pile calibration runs
 let pileRes = null, measure = null, lastResult = ''; // guide state: last pile residual (cm), a 5-round measurement in progress, its result line
-let droneFix = null, tracker = null, hearing = []; // detection shown on the map: who hears a rotor, where the level fit puts it
+let droneFix = null, tracker = null, hearing = [], detectMode = store('dp_mode') === 'detect'; // detection shown on the map: who hears a rotor, where the level fit puts it
 let refK = 0.5; // the reference phone's own delay (m), solved from the spread rounds; 0.5 is what iPhones showed on the pile
 let touchCal = null; // { ref, queue: [ids], cur, busy } guided touch calibration: each phone laid next to the reference, two rounds, its offset relative to the reference
 let pileOff = {}; try { pileOff = JSON.parse(store('dp_pileoff') || '{}'); } catch (e) {} // id -> offset (m) to add
