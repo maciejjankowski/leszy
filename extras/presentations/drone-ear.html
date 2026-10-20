@@ -87,12 +87,6 @@
         <aside class="notes">~20 s. Ciekawość. Leszy: duch lasu z polskich i ukraińskich wierzeń, strażnik puszczy. Wielki: kiedy stanie, będzie strzec całej granicy. Tylko wykrywanie i ostrzeganie.</aside>
     </section>
 
-    <section data-background-gradient="linear-gradient(to bottom, #0e1612, #13201a)">
-        <h2>Mój telefon i tak słyszy<br>wszystko, co mówię.</h2>
-        <p class="highlight fragment">Więc dałem mu pożyteczną robotę.</p>
-        <aside class="notes">~20 s. Żart. Poczekaj na śmiech, potem puenta.</aside>
-    </section>
-
     <!-- ACT 4: THE PROBLEM -->
     <section data-background-gradient="linear-gradient(to bottom, #13201a, #172a20)">
         <div class="stat">19</div>
@@ -102,9 +96,9 @@
     </section>
 
     <section data-background-gradient="linear-gradient(to bottom, #13201a, #172a20)">
-        <h2>Drony na światłowodzie nie nadają radiem.</h2>
-        <p class="highlight fragment">Ale śmigła wciąż się kręcą.</p>
-        <aside class="notes">~20 s. Detektory radiowe nic nie widzą. Śmigieł nie da się wyłączyć. Poziom 3, README VolAnti.</aside>
+        <h2>Najgłośniejszy sygnał drona to radio.</h2>
+        <p class="highlight fragment">Ale dron na światłowodzie nie nadaje nic. Śmigła wciąż się kręcą.</p>
+        <aside class="notes">~20 s. Detektory radiowe widzą łącze sterowania i wideo; na światłowodzie nie ma czego widzieć. Śmigieł nie da się wyłączyć. Poziom 3, README VolAnti.</aside>
     </section>
 
     <!-- ACT 5: THE SOLUTION -->
@@ -114,15 +108,15 @@
             <polyline id="spec" fill="none" stroke="#9fd3b0" stroke-width="3"></polyline>
             <g font-family="Inter" font-size="18" fill="#f2a93b" id="speclbl"></g>
         </svg>
-        <p>Równo rozstawione tony. Wiatr ani głosy takich nie dają.</p>
+        <p>Harmoniczne, jak struny gitary: ton podstawowy i jego wielokrotności. Wiatr ani głosy takich nie dają.</p>
         <aside class="notes">~35 s. Ulga. Łopaty x obroty na sekundę = ton podstawowy, potem 2x, 3x, 4x. Pokaż zęby grzebienia.</aside>
     </section>
 
     <section data-background-gradient="linear-gradient(to bottom, #172a20, #1c3326)">
         <p class="kicker">mechanizm 1 · detektor</p>
-        <h2>Nie bije na alarm bez powodu.</h2>
-        <p>Szum skacze. Śmigło trzyma jedną nutę.</p>
-        <p>Alarm dopiero, gdy nuta trwa jedną trzecią sekundy.</p>
+        <h2>Detektor jest prosty.</h2>
+        <p>Nasłuchujemy częstotliwości wirników i odpalamy alarm, gdy pojawi się ich sygnatura.</p>
+        <p>Sygnatura musi trwać jedną trzecią sekundy, żeby szum nie bił na alarm.</p>
         <div class="stat">0</div>
         <p class="stat-label">fałszywych alarmów na samym szumie, w każdym teście</p>
         <aside class="notes">~35 s. Dlaczego to ważne: tani detektor, który bije na alarm bez powodu, ktoś szybko wyłączy. Przez 2 s uczy się sali, ocenia grzebień, wymaga 6 odczytów z rzędu (po 60 ms na telefonie). Szum wygrywa jeden odczyt, nigdy sześć. Alarm 0,21 s od startu wirnika. Testy syntetyczne, 2026-10-14. Konstrukcja wg VolAnti, poziom 1.</aside>
@@ -130,10 +124,10 @@
 
     <section data-background-gradient="linear-gradient(to bottom, #1c3326, #22392b)">
         <p class="kicker">mechanizm 2 · fuzja</p>
-        <h2>Gdzie jest? Zapytaj każdy telefon.</h2>
+        <h2>Wykryć łatwo. Ale jak zlokalizować?</h2>
         <ul>
-            <li>Dwa razy dalej to cztery razy ciszej.</li>
-            <li>Szukam punktu, który pasuje do wszystkich telefonów.</li>
+            <li>Łączymy kilka detektorów i triangulujemy, jak geodeci od wieków: z odległości od znanych punktów.</li>
+            <li>Odległość daje głośność: dwa razy dalej to cztery razy ciszej.</li>
         </ul>
         <p class="small-text">3+ telefony · do pół metra w symulacji</p>
         <aside class="notes">~35 s. Dlaczego głośność: metody oparte na czasie dotarcia dźwięku wymagają zegarów zgranych co do mikrosekundy, a telefony takich nie mają. Głośność nie potrzebuje zegarów. -6 dB na każde podwojenie odległości.</aside>
