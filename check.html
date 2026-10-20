@@ -349,7 +349,7 @@ function drawMap(lay, nm) {
     if (inZero) { g.strokeStyle = 'rgba(168,100,0,.8)'; g.lineWidth = 2 * dpr; g.beginPath(); g.arc(x, y, 13 * dpr, 0, 7); g.stroke(); g.lineWidth = 1; }
     g.fillStyle = id === walker ? '#a86400' : '#1f7a3f'; g.beginPath(); g.arc(x, y, 7 * dpr, 0, 7); g.fill();
     const label = nm(id).replace(/&amp;/g, '&'), lw = g.measureText(label).width; // near the right edge: label goes left of the dot
-    g.fillStyle = '#eef3ee'; g.fillText(label, x + 10 * dpr + lw > cv.width ? x - 10 * dpr - lw : x + 10 * dpr, y + 4 * dpr);
+    g.fillStyle = '#111111'; g.fillText(label, x + 10 * dpr + lw > cv.width ? x - 10 * dpr - lw : x + 10 * dpr, y + 4 * dpr);
   }
 }
 let pollMs = 1000, pollTimer = setInterval(poll, pollMs); poll(); requestAnimationFrame(frame);
