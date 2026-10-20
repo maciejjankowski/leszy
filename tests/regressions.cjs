@@ -2,6 +2,11 @@
 const fs = require('fs'), vm = require('vm'), assert = require('assert/strict');
 const app = __dirname + '/../';
 const tests = [];
+// static guard: the roll-call beep must be started on a statement of its own (a trailing comment once swallowed s.start)
+test('beep start survives the gain-node line', () => {
+  const src = fs.readFileSync(app + 'party.html', 'utf8');
+  assert.match(src, /\n\s*s\.start\(Math\.max\(when, ctx\.currentTime \+ 0\.02\)\);/);
+});
 const test = (name, fn) => tests.push([name, fn]);
 function page(file) {
   const elements = new Map(), intervals = new Map(), timeouts = new Map(), requests = [], contexts = [];

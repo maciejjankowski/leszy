@@ -184,7 +184,8 @@ function rollcall(p) { // beep in my slot, then find every beep on my own clock
   if (k < 0) { say('Dołączyłeś po starcie odliczania: poczekaj na następne.', ''); return; }
   roundBusy = true; // no reload while beeping or listening
   const when = serverToCtx(p.t0 + k * p.slot * 1000);
-  const s = ctx.createBufferSource(), bg = ctx.createGain(); bg.gain.value = p.gain ?? 0.6; s.buffer = chirpBuf; s.connect(bg); bg.connect(out); // beep level comes with the round (weak speakers buzz when driven hard) s.start(Math.max(when, ctx.currentTime + 0.02));
+  const s = ctx.createBufferSource(), bg = ctx.createGain(); bg.gain.value = p.gain ?? 0.6; s.buffer = chirpBuf; s.connect(bg); bg.connect(out); // beep level comes with the round (weak speakers buzz when driven hard)
+  s.start(Math.max(when, ctx.currentTime + 0.02));
   if (p.walker === id) say('Idziesz: piszczę pierwszy', 'beep', 'ruszaj się spokojnie'); else say((LOCATE ? 'Piszczymy: ' : 'Odliczanie: ') + 'jesteś ' + (k + 1) + ' z ' + n, 'beep', p.walker ? 'odpowiadam idącemu' : 'nie ruszaj telefonu, cisza');
   const doneAt = p.t0 + n * p.slot * 1000 + 900;
   setTimeout(async () => {
