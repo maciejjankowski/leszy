@@ -202,7 +202,7 @@ function rollcall(p) { // beep in my slot, then find every beep on my own clock
       const win = Math.min(0.45, p.slot - 0.02); // the search window must end before the next phone's beep
       const r = Ranging.detectFirst(readRing(from, Math.round(win * sr)), chirp, { frac: p.frac, lookMs: p.lookMs }); // picker settings come with the round
       if (r) { snr[src] = Math.round(r.snr); lvl[src] = Math.round(200 * Math.log10(r.peak + 1e-12)) / 10; } // dB, for device profiles
-      if (r && r.snr > 8) heard[src] = (from + r.sample) / sr - (src === id ? outLat : 0);
+      if (r && r.snr > 8) heard[src] = (from + r.sample) / sr; // raw: two-way ranging cancels every fixed delay (field 2026-10-20: subtracting outputLatency added c/2 x latency per phone)
     });
     await api('heard', { id, round: p.round, heard, snr, lvl, lat: { out: outLat, base: baseLat, sr } });
     roundBusy = false;
