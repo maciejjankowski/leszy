@@ -250,10 +250,23 @@ async function tone() {
 }
 $('#go').onclick = start; $('#test').onclick = test; $('#tone').onclick = tone;
 // after a hot reload: rejoin by itself (mic permission is already granted for this site; audio may need one tap on iOS, then it says so)
-if (store('dp_joined') === '1' && !LOOP) start().catch(() => {});
+if (store('dp_joined') === '1' && !LOOP) {
+  $('#joinBox').hidden = true; $('#runBox').hidden = false;
+  say('STUKNIJ, ŻEBY WZNOWIĆ', 'drone', 'po przeładowaniu telefon gra dopiero po dotknięciu ekranu');
+  const once = () => { document.removeEventListener('pointerdown', once); start().catch(() => {}); };
+  document.addEventListener('pointerdown', once);
+}
 // a tap on the big status (or anywhere on the page) restarts audio output after an automatic rejoin
 let needTap = false;
-document.addEventListener('pointerdown', async () => { if (!ctx) return; try { await ctx.resume(); } catch (e) {} if (needTap && ctx.state === 'running') { needTap = false; say('Dźwięk włączony. Czekam na następny start.', 'ok', ''); } }, { passive: true });
+document.addEventListener('pointerdown', async () => {
+  if (!ctx) return;
+  if (needTap) { // output never started: tear the graph down and build it again now, inside the tap
+    needTap = false; try { await ctx.close(); } catch (e) {} prepared = null; chunks.length = 0;
+    try { await prepare(); say('Dźwięk włączony. Czekam na następny start.', 'ok', ''); } catch (e) { say('Nie udało się włączyć dźwięku', 'drone', e.message); needTap = true; }
+    return;
+  }
+  try { await ctx.resume(); } catch (e) {}
+}, { passive: true });
 document.addEventListener('visibilitychange', () => { if (!document.hidden && ctx) ctx.resume(); });
 </script>
 </html>
