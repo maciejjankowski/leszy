@@ -219,7 +219,23 @@ async function poll() {
   const tapeOk = Object.fromEntries(Object.entries(tape).filter(([k]) => !notPile.includes(k)));
   // touch tour: a device touched by the walker reads raw ~ 0 - offset(walker) - offset(device). With the walker as the zero
   // reference, offset(device) = -raw. Only pair sums matter to the map, so the walker's own gap shifts every device alike.
-  const touchOff = {}; for (const [id, t] of Object.entries(touches)) if (t.walker !== id) touchOff[id] = -t.raw;
+  // touch: raw(ref, X) = 0.05 + k_ref + k_X. Taking k_ref as zero makes every X carry k_ref too, so pairs X-Y come out short by 2 k_ref.
+  // Solve k_ref from the spread rounds: the value (0-3 m) that makes the map of touched phones self-consistent (lowest spring stress).
+  const touchOff = {}, refs = new Set(Object.values(touches).map(t => t.walker)), base = {};
+  for (const [id, t] of Object.entries(touches)) if (t.walker !== id) base[id] = -t.raw;
+  if (refs.size === 1) {
+    const ref = [...refs][0], idsT = [ref, ...Object.keys(base)].filter(i => dIds.includes(i)), dT = rawD.filter(x => idsT.includes(x.a) && idsT.includes(x.b));
+    if (idsT.length >= 4 && dT.length >= 5 && !p.walker) {
+      let best = { k: refK, rms: Infinity };
+      for (let k = 0; k <= 3; k += 0.02) {
+        const off = { [ref]: -k }; for (const i of Object.keys(base)) off[i] = base[i] + k;
+        const dd = dT.map(x => ({ a: x.a, b: x.b, d: x.raw + off[x.a] + off[x.b] })); if (dd.some(x => x.d < 0.03)) continue;
+        const l = Ranging.layout(idsT, dd, { iters: 60, robust: true }); if (l.rms < best.rms) best = { k, rms: l.rms };
+      }
+      if (best.rms < Infinity) refK = best.k;
+    }
+    touchOff[ref] = -refK; for (const i of Object.keys(base)) touchOff[i] = base[i] + refK;
+  } else for (const i of Object.keys(base)) touchOff[i] = base[i];
   const fit = Ranging.fitOffsets(rawD, tapeOk); // tape-measured pairs -> per-phone speaker-mic offset
   for (const m of d.members) { if (m.joined && joinedAt[m.id] && m.joined !== joinedAt[m.id]) { if (pileOff[m.id] !== undefined || touches[m.id]) { delete pileOff[m.id]; delete touches[m.id]; store('dp_pileoff', JSON.stringify(pileOff)); store('dp_touch', JSON.stringify(touches)); toast(nm(m.id) + ' przeładował się: jego kalibracja wygasła', true); } } if (m.joined) joinedAt[m.id] = m.joined; }
   const offset = Object.fromEntries(dIds.map(i => [i, pileOff[i] ?? touchOff[i] ?? (fit.k[i] ?? fit.shared)])); // pile beats touch beats tape beats shared
@@ -249,7 +265,7 @@ async function poll() {
   const dists = useMedian && roundsForMed.length >= 2 ? Ranging.medianDistances(dIds, roundsForMed, { c, offset }) : Ranging.pairDistances(dIds, heard, { c, offset });
   if (!p.walker) roundMeta[p.round] = { order: p.order, slot: p.slot }; else delete roundMeta[p.round]; // remember each round's order/slot for the medians
 
-  $('#cal').textContent = (Object.keys(pileOff).length ? 'Ze stosu: ' + Object.entries(pileOff).map(([i, v]) => nm(i) + ' ' + (v * 100).toFixed(0) + ' cm').join(', ') + ' · ' : '') + (Object.keys(touchOff).length ? 'Z dotyków: ' + Object.entries(touchOff).map(([i, v]) => nm(i) + ' ' + (v * 100).toFixed(0) + ' cm').join(', ') + ' · ' : '') + (fit.n ? 'Poprawka z ' + fit.n + ' pomiarów taśmą: ' + (fit.shared * 100).toFixed(0) + ' cm na telefon' + (Object.keys(fit.k).length > 1 && fit.n >= Object.keys(fit.k).length ? ' (osobno dla każdego)' : ' (wspólna)') : 'bez pomiarów taśmą ani stosu');
+  $('#cal').textContent = (Object.keys(pileOff).length ? 'Ze stosu: ' + Object.entries(pileOff).map(([i, v]) => nm(i) + ' ' + (v * 100).toFixed(0) + ' cm').join(', ') + ' · ' : '') + (Object.keys(touchOff).length ? 'Z dotyków (odniesienie ' + (refK * 100).toFixed(0) + ' cm): ' + Object.entries(touchOff).map(([i, v]) => nm(i) + ' ' + (v * 100).toFixed(0) + ' cm').join(', ') + ' · ' : '') + (fit.n ? 'Poprawka z ' + fit.n + ' pomiarów taśmą: ' + (fit.shared * 100).toFixed(0) + ' cm na telefon' + (Object.keys(fit.k).length > 1 && fit.n >= Object.keys(fit.k).length ? ' (osobno dla każdego)' : ' (wspólna)') : 'bez pomiarów taśmą ani stosu');
   const used = dIds.filter(i => dists.some(x => x.a === i || x.b === i));
   let lay = null;
   if (p.walker) { // a walker round never refits the room: the still phones keep the frozen map, the walker is placed alone on it
@@ -331,6 +347,7 @@ let walker = null, trail = [], pressTimer = null, pressed = false, frozen = null
 const joinedAt = {}; // when each member last joined; a new join = reloaded page = stale calibration
 let pileCal = null; // { startRound, rounds: [] } while a pile calibration runs
 let pileRes = null, measure = null, lastResult = ''; // guide state: last pile residual (cm), a 5-round measurement in progress, its result line
+let refK = 0.5; // the reference phone's own delay (m), solved from the spread rounds; 0.5 is what iPhones showed on the pile
 let touchCal = null; // { ref, queue: [ids], cur, busy } guided touch calibration: each phone laid next to the reference, two rounds, its offset relative to the reference
 let pileOff = {}; try { pileOff = JSON.parse(store('dp_pileoff') || '{}'); } catch (e) {} // id -> offset (m) to add
 let touches = {}; try { touches = JSON.parse(store('dp_touch') || '{}'); } catch (e) {} // id -> { walker, raw, lvl: {wd, dw, ww, dd}, round }
