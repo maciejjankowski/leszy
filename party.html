@@ -34,11 +34,10 @@
     <ol class="steps">
       <li id="stInstall" data-ios="Opcjonalnie: stuknij Udostępnij, potem Do ekranu początkowego. Pełny ekran, nie gaśnie." data-android="Opcjonalnie: stuknij menu (trzy kropki), potem Zainstaluj aplikację." data-other="Opcjonalnie: zainstaluj tę stronę jako aplikację z menu przeglądarki."></li>
       <li id="stRinger" data-ios="Dzwonek WŁĄCZONY: boczny przełącznik nie może pokazywać pomarańczowego (tryb cichy wycisza tę stronę)." data-android="Dźwięk WŁĄCZONY: nie wyciszenie, nie wibracje." data-other="Dźwięk włączony."></li>
-      <li>Głośność: stuknij <b>Ton</b> i podgłaśniaj, aż pasek zrobi się zielony.</li>
+      <li>Głośność: stuknij <b>Ton</b> (niżej) i podgłaśniaj, aż pasek zrobi się zielony.</li>
       <li id="stFlat">Połóż telefon płasko, ekranem do góry, <b>górną krawędzią w stronę prowadzącego</b>. Wszyscy tak samo, wtedy każdy telefon słyszy podobnie.</li>
       <li>Stuknij <b>Test</b> i zezwól na mikrofon. Powinien rozlec się krótki gwizd.</li>
     </ol>
-    <div class="row"><button class="big" id="tone">Ton</button><div id="meter"><i></i></div></div>
     <div class="row"><button class="big" id="test">Test</button><span id="testRes" class="muted"></span></div>
     </details>
   </div>
@@ -46,6 +45,10 @@
     <div id="big">Czekam na odliczanie...</div>
     <p id="sub" class="muted"></p>
     <p id="dir" class="muted" style="text-align:center;font-size:1.2em"></p>
+  </div>
+  <div class="card">
+    <div class="row"><button class="big" id="tone">Ton</button><div id="meter"><i></i></div></div>
+    <p class="muted">Ton gra, aż go zatrzymasz. Podgłaśniaj, aż pasek zrobi się zielony: wtedy ten telefon słyszy sam siebie.</p>
   </div>
 </div>
 <script src="ranging.js"></script>
@@ -227,19 +230,22 @@ function listen() { // learn the room while nothing flies; while drones fly, rep
   for (const d of JSON.parse(droneKey)) levels[d.id] = +Ranging.combLevel(db, floor, binHz, d.f0).toFixed(1);
   api('levels', { id, levels }).catch(() => {});
 }
-// Ton: 4 s low tone (+ its octave) while a bar shows how loudly my own mic hears it; turn the volume up until green
+// Ton: low tone (+ its octave) until stopped (60 s cap) while a bar shows how loudly my own mic hears it; turn the volume up until green
+let toneOn = null;
+function toneStop() { if (!toneOn) return; const { g, oscs } = toneOn; toneOn = null; try { g.gain.cancelScheduledValues(ctx.currentTime); g.gain.setTargetAtTime(0, ctx.currentTime, 0.03); oscs.forEach(o => o.stop(ctx.currentTime + 0.2)); } catch (e) {} setTimeout(() => { try { g.disconnect(); } catch (e) {} }, 300); $('#tone').textContent = 'Ton'; $('#tone').classList.remove('on'); }
 async function tone() {
+  if (toneOn) { toneStop(); return; }
   try { await prepare(); } catch (e) { prepared = null; $('#err').textContent = 'Mikrofon zablokowany: ' + e.message + '. Zezwól w ustawieniach przeglądarki i odśwież stronę.'; return; }
   if (ctx.state !== 'running') { $('#err').textContent = 'Dźwięk zablokowany: stuknij Ton jeszcze raz.'; return; }
-  const t = ctx.currentTime + 0.05, g = ctx.createGain(), oscs = [[330, 0.5], [660, 0.25]].map(([f, a]) => { const o = ctx.createOscillator(), og = ctx.createGain(); o.frequency.value = f; og.gain.value = a; o.connect(og); og.connect(g); o.start(t); o.stop(t + 4.05); return o; });
-  g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(0.9, t + 0.1); g.gain.setValueAtTime(0.9, t + 3.9); g.gain.linearRampToValueAtTime(0, t + 4);
-  g.connect(out); $('#tone').disabled = true;
-  const td = new Float32Array(an.fftSize), end = performance.now() + 4200;
+  const t = ctx.currentTime + 0.05, g = ctx.createGain(), oscs = [[330, 0.5], [660, 0.25]].map(([f, a]) => { const o = ctx.createOscillator(), og = ctx.createGain(); o.frequency.value = f; og.gain.value = a; o.connect(og); og.connect(g); o.start(t); o.stop(t + 60.2); return o; });
+  g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(0.9, t + 0.1); g.gain.setValueAtTime(0.9, t + 59.9); g.gain.linearRampToValueAtTime(0, t + 60);
+  g.connect(out); toneOn = { g, oscs }; $('#tone').textContent = 'Stop'; $('#tone').classList.add('on');
+  const td = new Float32Array(an.fftSize), end = performance.now() + 60200;
   (function draw() {
     an.getFloatTimeDomainData(td); let s2 = 0; for (const v of td) s2 += v * v;
     const db = 20 * Math.log10(Math.sqrt(s2 / td.length) + 1e-9), pct = Math.max(0, Math.min(100, (db + 60) / 50 * 100)); // -60..-10 dBFS
     $('#meter i').style.width = pct + '%'; $('#meter').classList.toggle('ok', db > -30);
-    if (performance.now() < end) requestAnimationFrame(draw); else { $('#tone').disabled = false; g.disconnect(); }
+    if (toneOn && toneOn.g === g && performance.now() < end) requestAnimationFrame(draw); else if (toneOn && toneOn.g === g) toneStop();
   })();
 }
 $('#go').onclick = start; $('#test').onclick = test; $('#tone').onclick = tone;
