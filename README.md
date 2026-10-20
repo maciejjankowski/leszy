@@ -136,3 +136,25 @@ Design notes for the border-scale network: `../2026-10-14_border-acoustic-networ
 ## Credits and licence
 
 Detector approach: VolAnti by Agam Rossen (Apache-2.0 code, CERN-OHL-W hardware). Edge + LoRa architecture: Batear. This prototype: plain JS + PHP, no frameworks.
+
+
+## SSOT
+
+Every string, threshold and the guide's step logic of `check.html` and `party.html` live in YAML; the HTML carries structure only and renders from data (`data-ssot="key"` attributes and `t('key', {vars})` calls).
+
+| What | Where |
+|---|---|
+| All user-facing Polish text (`{name}` placeholders, `{n|runda|rundy|rund}` plural forms) | `ssot/ui.yaml` |
+| The guide of `check.html` as a state machine (join, touch-calibrate, measure, detect: entry, instruction, primary action, secondary actions incl. skip / cancel / back, exit) | `ssot/flow.yaml`, read through `guide.js` |
+| Facts: thresholds, rounds, band defaults, timings | `ssot/params.yaml` |
+| Loader (`SSOT.t`, `SSOT.apply`, `SSOT.flow`, `SSOT.params`) | `ssot.js` fetches `ssot/ssot.json` |
+
+The YAML is the editable source; the browser reads the generated JSON. After every edit of a `.yaml` file, from the project folder (the parent of this one):
+
+```
+node tools/build_ssot.js           # writes app/ssot/ssot.json
+node tools/build_ssot.js --check   # fails when the JSON is stale or a page / flow.yaml uses a key that does not exist
+node tests/guide.test.cjs          # SSOT checks, plus the real check.html script against a mock hub
+```
+
+Deploy `ssot/ssot.json` with the pages. `party.php` includes `ssot.js` and `ssot/ssot.json` in its app version, so phones reload when a text changes. Band ranges are owned by `party.php`; `params.yaml` repeats them and the test compares the two.

@@ -42,7 +42,7 @@ $a = $_GET['a'] ?? 'state';
 // deployed app version = newest mtime of the guest page and its scripts; guest pages reload themselves when it changes
 function appVersion() { // content hash, not mtime: a deploy that touches only other files must not reload the phones
   static $v = null; if ($v !== null) return $v;
-  $h = ''; foreach (['party.html', 'ranging.js', 'tap-worklet.js', 'synth.js', 'style.css', 'detector.js', 'meter.js'] as $f) $h .= @md5_file(__DIR__ . '/' . $f) ?: '';
+  $h = ''; foreach (['party.html', 'ranging.js', 'tap-worklet.js', 'synth.js', 'style.css', 'detector.js', 'meter.js', 'ssot.js', 'ssot/ssot.json'] as $f) $h .= @md5_file(__DIR__ . '/' . $f) ?: '';
   return $v = substr(md5($h), 0, 12);
 }
 if ($a === 'time') out(['t' => $now * 1000]);

@@ -1,0 +1,85 @@
+# The guide strip of check.html as a state machine. Text lives in ui.yaml (keys below are ui keys);
+# numbers live in params.yaml. Predicates and actions are implemented in guide.js / check.html and
+# tests/guide.test.cjs fails when a name used here has no implementation.
+#
+# Rules this file enforces for every state:
+#   1. The strip says what the person physically does and shows one primary button.
+#   2. Detekcja dronów (action detect) is one press away, also while a measurement runs.
+#   3. A running measurement can be cancelled (cancel_run).
+#   4. Each state has a way back (back_*) and, where it makes sense, a skip (skip_*).
+#      measure has no skip on purpose: skipping a measurement is the same thing as Detekcja dronów.
+# How the next state is chosen: detect mode first, then a running measurement, then a forced state
+# (set by a back_* action), then the first state in "order" whose entry predicate is true.
+
+version: 1
+steps_total: 3
+initial: join
+order: [detect, join, touch-calibrate, measure]
+
+states:
+  join:
+    step: 1
+    entry: phones_below_min        # fewer live phones than phones.min_for_map, and not skipped
+    exit: [phones_at_min, join_next, skip_join, detect]
+    title: guide.join.title
+    instruction: guide.join.instruction
+    status: guide.join.status
+    primary: { id: join_next, label: guide.join.primary, show: phones_at_min }   # only after a Wróć from step 2: otherwise the step ends by itself
+    secondary:
+      - { id: detect, label: guide.action_detect }
+      - { id: skip_join, label: guide.join.skip }
+      - { id: back_home, label: guide.join.back, href: index.html }
+
+  touch-calibrate:
+    step: 2
+    entry: phones_uncalibrated     # a touch calibration is open, or a live phone has no offset yet
+    exit: [queue_empty, skip_all, back_to_join, detect]
+    title: guide.touch-calibrate.title
+    instruction: guide.touch-calibrate.instruction
+    status: guide.touch-calibrate.status
+    primary: { id: touch_measure, label: guide.touch-calibrate.primary }
+    secondary:
+      - { id: detect, label: guide.action_detect }
+      - { id: skip_phone, label: guide.touch-calibrate.skip_phone }
+      - { id: skip_all, label: guide.touch-calibrate.skip_all }
+      - { id: back_to_join, label: guide.touch-calibrate.back }
+    busy:                          # two rounds are running
+      title: guide.touch-calibrate.busy.title
+      instruction: guide.touch-calibrate.busy.instruction
+      status: guide.touch-calibrate.busy.status
+      primary: null
+      secondary:
+        - { id: detect, label: guide.action_detect }
+        - { id: cancel_run, label: guide.touch-calibrate.busy.cancel }
+
+  measure:
+    step: 3
+    entry: always                  # everything calibrated, skipped or not needed
+    exit: [detect, back_to_touch]
+    title: guide.measure.title
+    instruction: guide.measure.instruction
+    status: null
+    primary: { id: measure_run, label: guide.measure.primary }
+    secondary:
+      - { id: detect, label: guide.action_detect }
+      - { id: back_to_touch, label: guide.measure.back }
+    busy:                          # the measurement rounds are running
+      title: guide.measure.busy.title
+      instruction: guide.measure.busy.instruction
+      status: guide.measure.busy.status
+      primary: null
+      secondary:
+        - { id: detect, label: guide.action_detect }
+        - { id: cancel_run, label: guide.measure.busy.cancel }
+
+  detect:
+    step: null                     # not a numbered step: a mode
+    entry: detect_mode             # set by the detect action, remembered across reloads
+    exit: [back_to_calibration]
+    title: guide.detect.title
+    title_alt: guide.detect.title_drone   # while at least one phone hears a rotor
+    instruction: guide.detect.instruction
+    status: guide.detect.status
+    primary: null                  # nothing to press: the phones listen by themselves
+    secondary:
+      - { id: back_to_calibration, label: guide.detect.back }

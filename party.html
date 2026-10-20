@@ -1,6 +1,6 @@
 <!doctype html>
 <html lang="pl"><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Wielki Leszy - dołącz</title>
+<title data-ssot="party.title"></title>
 <link rel="stylesheet" href="style.css">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Leszy">
@@ -18,47 +18,50 @@
   .toast { background: #eeece6; border: 1px solid var(--ok); color: var(--fg); padding: 10px 12px; border-radius: 10px; box-shadow: 0 4px 14px rgba(0,0,0,.4); }
   .toast.warn { border-color: var(--warn); }
   .steps { padding-left: 1.2em; }
+  #go { background: var(--accent); color: #fff; }
   #meter { flex: 1; min-width: 120px; height: 14px; background: var(--line); border-radius: 7px; overflow: hidden; }
   #meter i { display: block; height: 100%; width: 0; background: var(--warn); transition: width .08s; }
   #meter.ok i { background: var(--ok); } .steps li { margin: .45em 0; }
 </style>
 <div id="toasts"></div>
 <div class="wrap">
-  <h1>WIELKI LESZY · NA ŻYWO</h1>
+  <h1 id="h1"></h1>
   <div id="joinBox" class="card">
-    <label style="display:block">Twoje imię <input id="name" size="12" maxlength="24"></label>
-    <button class="big" id="go" style="margin-top:12px">Dołącz</button>
+    <label style="display:block"><span data-ssot="party.name_label"></span> <input id="name" size="12" maxlength="24" data-ssot-attr="placeholder:party.name_ph"></label>
+    <button class="big" id="go" style="margin-top:12px" data-ssot="party.join"></button>
     <p id="err" style="color:var(--hot)"></p>
-    <p class="muted">Twój telefon raz piśnie, a potem będzie słuchał. Nic nie jest nagrywane ani wysyłane poza kilkoma liczbami.</p>
-    <details><summary>Zanim dołączysz: dźwięk i ułożenie</summary>
+    <p class="muted" data-ssot="party.privacy"></p>
+    <details><summary data-ssot="party.prep_summary"></summary>
     <ol class="steps">
-      <li id="stInstall" data-ios="Opcjonalnie: stuknij Udostępnij, potem Do ekranu początkowego. Pełny ekran, nie gaśnie." data-android="Opcjonalnie: stuknij menu (trzy kropki), potem Zainstaluj aplikację." data-other="Opcjonalnie: zainstaluj tę stronę jako aplikację z menu przeglądarki."></li>
-      <li id="stRinger" data-ios="Dzwonek WŁĄCZONY: boczny przełącznik nie może pokazywać pomarańczowego (tryb cichy wycisza tę stronę)." data-android="Dźwięk WŁĄCZONY: nie wyciszenie, nie wibracje." data-other="Dźwięk włączony."></li>
-      <li>Głośność: stuknij <b>Ton</b> (niżej) i podgłaśniaj, aż pasek zrobi się zielony.</li>
-      <li id="stFlat">Połóż telefon płasko, ekranem do góry, <b>górną krawędzią w stronę prowadzącego</b>. Wszyscy tak samo, wtedy każdy telefon słyszy podobnie.</li>
-      <li>Stuknij <b>Test</b> i zezwól na mikrofon. Powinien rozlec się krótki gwizd.</li>
+      <li id="stInstall"></li>
+      <li id="stRinger"></li>
+      <li data-ssot="party.steps.volume"></li>
+      <li id="stFlat"></li>
+      <li data-ssot="party.steps.test"></li>
     </ol>
-    <div class="row"><button class="big" id="test">Test</button><span id="testRes" class="muted"></span></div>
+    <div class="row"><button class="big" id="test" data-ssot="party.test.button"></button><span id="testRes" class="muted"></span></div>
     </details>
   </div>
   <div id="runBox" hidden>
     <p id="meName" style="text-align:center;font-size:1.6em;font-weight:700;margin:.2em 0"></p>
-    <div id="big">Czekam na odliczanie...</div>
+    <div id="big" data-ssot="party.run.waiting"></div>
     <p id="detLine" class="muted" style="text-align:center;font-size:1.1em"></p>
     <p id="sub" class="muted"></p>
     <p id="dir" class="muted" style="text-align:center;font-size:1.2em"></p>
   </div>
   <div class="card">
-    <div class="row"><button class="big" id="tone">Ton</button><div id="meter"><i></i></div></div>
-    <p class="muted">Ton gra, aż go zatrzymasz. Podgłaśniaj, aż pasek zrobi się zielony: wtedy ten telefon słyszy sam siebie.</p>
+    <div class="row"><button class="big" id="tone" data-ssot="party.tone.button"></button><div id="meter"><i></i></div></div>
+    <p class="muted" data-ssot="party.tone.help"></p>
   </div>
 </div>
+<script src="ssot.js"></script>
 <script src="ranging.js"></script>
 <script src="detector.js?v=2"></script>
-<script src="meter.js?v=1"></script>
+<script src="meter.js?v=2"></script>
 <script src="synth.js"></script>
 <script>
-const $ = s => document.querySelector(s);
+SSOT.ready.then(() => { // every string and threshold below comes from ssot/*.yaml
+const $ = s => document.querySelector(s), t = SSOT.t, P = SSOT.params, PP = P.phone;
 const store = (k, v) => { try { if (v === undefined) return localStorage.getItem(k); localStorage.setItem(k, v); } catch (e) {} };
 let id = store('dp_id'); if (!id) { id = 'a' + Math.random().toString(36).slice(2, 8); store('dp_id', id); }
 const qs = new URLSearchParams(location.search), role = (qs.get('role') || '').toUpperCase(); // L / R = stage anchors
@@ -70,8 +73,8 @@ const api = (a, body) => fetch('party.php?a=' + a + (ROOM ? '&room=' + ROOM : ''
 
 let appVer = 0, roundBusy = false, ctx, sr, an, out, chirp, chirpBuf, off = 0, chunks = [], lastRound = -1, floor = null, drone = null, droneKey = '', lock;
 function toast(text, warn) {
-  const t = document.createElement('div'); t.className = 'toast' + (warn ? ' warn' : ''); t.textContent = text;
-  $('#toasts').appendChild(t); setTimeout(() => t.remove(), 8000);
+  const el = document.createElement('div'); el.className = 'toast' + (warn ? ' warn' : ''); el.textContent = text;
+  $('#toasts').appendChild(el); setTimeout(() => el.remove(), P.toasts.party_ms);
 }
 const say = (t, cls, sub) => { $('#big').textContent = t; $('#big').className = cls || ''; $('#sub').textContent = sub || ''; };
 
@@ -91,9 +94,10 @@ function readRing(from, len) { // samples [from, from+len) on this phone's own a
 
 // platform-specific setup steps
 const plat = /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1) ? 'ios' : /Android/.test(navigator.userAgent) ? 'android' : 'other';
-for (const li of document.querySelectorAll('[data-ios]')) li.textContent = li.dataset[plat];
-if (matchMedia('(display-mode: standalone)').matches || navigator.standalone) $('#stInstall').textContent = 'Zainstalowane. Super.';
-if (LOCATE) $('#stFlat').textContent = 'Połóż telefon tam, gdzie ma być, głośnikiem nie do stołu (np. na książce, bokiem). Kierunek nie ma znaczenia.';
+const standalone = matchMedia('(display-mode: standalone)').matches || navigator.standalone;
+SSOT.set($('#stInstall'), standalone ? 'party.steps.install.done' : 'party.steps.install.' + plat); SSOT.set($('#stRinger'), 'party.steps.ringer.' + plat);
+SSOT.set($('#stFlat'), LOCATE ? 'party.steps.flat_locate' : 'party.steps.flat_show'); $('#h1').textContent = t(LOCATE ? 'party.h1_locate' : 'party.h1_show');
+$('#name').maxLength = PP.name_max;
 
 // compass: heading of the phone's top edge (iOS asks permission on a tap; Android gives absolute orientation)
 let heading = null, stageHeading = null, lastPose = 0;
@@ -104,10 +108,10 @@ async function compass() {
 }
 function coach() { // tell the user which way to turn so the top edge faces the stage (= where the room points); drone show only
   if (heading == null || LOCATE) { $('#dir').textContent = ''; return; }
-  if (Date.now() - lastPose > 2000) { lastPose = Date.now(); api('pose', { id, heading: Math.round(heading) }).catch(() => {}); }
-  if (stageHeading == null) { $('#dir').textContent = 'Górna krawędź w stronę prowadzącego'; return; }
+  if (Date.now() - lastPose > P.phone.pose_ms) { lastPose = Date.now(); api('pose', { id, heading: Math.round(heading) }).catch(() => {}); }
+  if (stageHeading == null) { $('#dir').textContent = t('party.run.edge'); return; }
   const d = ((heading - stageHeading + 540) % 360) - 180;
-  $('#dir').textContent = Math.abs(d) < 15 ? 'Kierunek dobry ✓' : 'Obróć telefon o ' + Math.round(Math.abs(d)) + '° w ' + (d > 0 ? 'lewo' : 'prawo');
+  $('#dir').textContent = Math.abs(d) < PP.coach_ok_deg ? t('party.run.dir_ok') : t('party.run.turn', { deg: Math.round(Math.abs(d)), side: t(d > 0 ? 'party.run.left' : 'party.run.right') });
 }
 
 let prepared = null;
@@ -115,20 +119,20 @@ function prepare() { if (!prepared) prepared = setupAudio(); return prepared; }
 
 // Test: play a short whistle and check my own mic heard it = speaker, volume and mic permission in one go
 async function test() {
-  $('#testRes').textContent = 'sprawdzam...'; $('#err').textContent = '';
+  $('#testRes').textContent = t('party.test.checking'); $('#err').textContent = '';
   compass();
-  try { await prepare(); } catch (e) { prepared = null; $('#testRes').textContent = ''; $('#err').textContent = 'Mikrofon zablokowany: ' + e.message + '. Zezwól w ustawieniach przeglądarki i odśwież stronę.'; return; }
+  try { await prepare(); } catch (e) { prepared = null; $('#testRes').textContent = ''; $('#err').textContent = t('party.test.mic_blocked', { err: e.message }); return; }
   const td = new Float32Array(an.fftSize), rms = () => { an.getFloatTimeDomainData(td); let s = 0; for (const v of td) s += v * v; return Math.sqrt(s / td.length) + 1e-9; };
-  if (ctx.state !== 'running') { $('#testRes').textContent = 'Dźwięk zablokowany: stuknij Test jeszcze raz.'; return; }
+  if (ctx.state !== 'running') { $('#testRes').textContent = t('party.test.sound_blocked'); return; }
   const before = rms();
-  const o = ctx.createOscillator(), g = ctx.createGain(), t = ctx.currentTime + 0.05;
-  o.frequency.setValueAtTime(2000, t); o.frequency.linearRampToValueAtTime(4000, t + 0.6);
-  g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(0.8, t + 0.03); g.gain.setValueAtTime(0.8, t + 0.55); g.gain.linearRampToValueAtTime(0, t + 0.6);
-  o.connect(g); g.connect(out); o.start(t); o.stop(t + 0.62);
-  await new Promise(r => setTimeout(r, 400));
+  const o = ctx.createOscillator(), g = ctx.createGain(), t0 = ctx.currentTime + 0.05;
+  o.frequency.setValueAtTime(PP.test_sweep_hz[0], t0); o.frequency.linearRampToValueAtTime(PP.test_sweep_hz[1], t0 + 0.6);
+  g.gain.setValueAtTime(0, t0); g.gain.linearRampToValueAtTime(PP.test_gain, t0 + 0.03); g.gain.setValueAtTime(PP.test_gain, t0 + 0.55); g.gain.linearRampToValueAtTime(0, t0 + 0.6);
+  o.connect(g); g.connect(out); o.start(t0); o.stop(t0 + 0.62);
+  await new Promise(r => setTimeout(r, PP.test_listen_ms));
   const rise = 20 * Math.log10(rms() / before);
-  const ok = rise > 10;
-  $('#testRes').textContent = ok ? 'Głośnik i mikrofon OK (+' + rise.toFixed(0) + ' dB)' : 'Słabo słychać (+' + rise.toFixed(0) + ' dB): dzwonek włączony? głośność w górę?';
+  const ok = rise > PP.test_min_rise_db;
+  $('#testRes').textContent = t(ok ? 'party.test.ok' : 'party.test.weak', { db: rise.toFixed(0) });
   $('#testRes').style.color = ok ? 'var(--ok)' : 'var(--warn)';
 }
 
@@ -139,11 +143,11 @@ async function start() {
     await prepare();
     await syncClock();
     await api('join', { id, name: name || id, role });
-  } catch (e) { prepared = null; $('#err').textContent = 'Nie udało się uruchomić: ' + e.message + (isSecureContext ? '' : ' (wymaga https)') + (store('dp_joined') === '1' ? ' · stuknij Dołącz' : ''); return; } // an auto-rejoin that iOS blocks (no tap yet) just asks for a tap
+  } catch (e) { prepared = null; $('#err').textContent = t('party.run.start_failed', { err: e.message, https: isSecureContext ? '' : t('party.run.needs_https'), tap: store('dp_joined') === '1' ? t('party.run.tap_join') : '' }); return; } // an auto-rejoin that iOS blocks (no tap yet) just asks for a tap
   try { lock = await navigator.wakeLock.request('screen'); } catch (e) {}
   $('#joinBox').hidden = true; $('#runBox').hidden = false; $('#meName').textContent = name || id;
-  say(role ? 'SCENA ' + (role === 'L' ? 'LEWA' : 'PRAWA') : (LOCATE ? 'Jesteś w grze. Czekam na start...' : 'Jesteś w grze. Czekam na odliczanie...'), 'ok', name);
-  setInterval(poll, 1000); setInterval(listen, 250); setInterval(coach, 500); setInterval(detectTick, 80);
+  say(role ? t(role === 'L' ? 'party.run.stage_left' : 'party.run.stage_right') : t(LOCATE ? 'party.run.in_game_locate' : 'party.run.in_game_show'), 'ok', name);
+  setInterval(poll, PP.poll_ms); setInterval(listen, PP.listen_ms); setInterval(coach, PP.coach_ms); setInterval(detectTick, PP.detect_ms);
 }
 
 async function setupAudio() {
@@ -170,7 +174,7 @@ async function poll() {
   let j; try { j = await api('state'); } catch (e) { return; }
   stageHeading = j.stage;
   const p = j.party;
-  if (j.ver) { if (!appVer) appVer = j.ver; else if (j.ver !== appVer && !roundBusy) { say('Nowa wersja, przeładowuję...', 'warm', ''); setTimeout(() => location.reload(), 800); return; } } // hot reload after a deploy
+  if (j.ver) { if (!appVer) appVer = j.ver; else if (j.ver !== appVer && !roundBusy) { say(t('party.run.new_version'), 'warm', ''); setTimeout(() => location.reload(), PP.reload_delay_ms); return; } } // hot reload after a deploy
   if (p.phase === 'rollcall' && p.round !== lastRound) rollcall(p);
   const key = p.phase === 'drones' ? JSON.stringify(p.drones) : '';
   if (!LOCATE && key !== droneKey) { droneKey = key; droneMode(p); }
@@ -179,46 +183,46 @@ async function poll() {
 function rollcall(p) { // beep in my slot, then find every beep on my own clock
   lastRound = p.round;
   const k = p.order.indexOf(id), n = p.order.length;
-  let band = p.band || [8000, 12000]; // the round says which band to beep in
-  if (band[1] > sr / 2 - 500) { band = [8000, 12000]; toast('Ten telefon nie zagra tak wysoko (' + sr + ' Hz); piszczy w paśmie 8-12 kHz', true); } // 44.1 kHz phones cannot do 18 kHz cleanly
+  let band = p.band || P.fallback_band; // the round says which band to beep in
+  if (band[1] > sr / 2 - P.band_margin_hz) { band = P.fallback_band; toast(t('party.run.high_band', { sr, lo: P.fallback_band[0] / 1000, hi: P.fallback_band[1] / 1000 }), true); } // 44.1 kHz phones cannot do 18 kHz cleanly
   if (!chirp.band || chirp.band[0] !== band[0] || chirp.band[1] !== band[1]) {
     chirp = Ranging.makeChirp(sr, band[0], band[1]); chirp.band = band;
     chirpBuf = ctx.createBuffer(1, chirp.n, sr); chirpBuf.getChannelData(0).set(chirp.re);
   }
-  if (k < 0) { say('Dołączyłeś po starcie odliczania: poczekaj na następne.', ''); return; }
+  if (k < 0) { say(t('party.run.late'), ''); return; }
   roundBusy = true; // no reload while beeping or listening
   const when = serverToCtx(p.t0 + k * p.slot * 1000);
   const s = ctx.createBufferSource(), bg = ctx.createGain(); bg.gain.value = p.gain ?? 0.6; s.buffer = chirpBuf; s.connect(bg); bg.connect(out); // beep level comes with the round (weak speakers buzz when driven hard)
   s.start(Math.max(when, ctx.currentTime + 0.02));
-  if (p.walker === id) say('Idziesz: piszczę pierwszy', 'beep', 'ruszaj się spokojnie'); else say((LOCATE ? 'Piszczymy: ' : 'Odliczanie: ') + 'jesteś ' + (k + 1) + ' z ' + n, 'beep', p.walker ? 'odpowiadam idącemu' : 'nie ruszaj telefonu, cisza');
+  if (p.walker === id) say(t('party.run.walker_title'), 'beep', t('party.run.walker_sub')); else say(t(LOCATE ? 'party.run.count_locate' : 'party.run.count_show', { k: k + 1, n }), 'beep', t(p.walker ? 'party.run.answer_walker' : 'party.run.hold_still'));
   const doneAt = p.t0 + n * p.slot * 1000 + 900;
   setTimeout(async () => {
     const heard = {}, snr = {}, lvl = {};
-    // my own beep reaches my mic after the OUTPUT latency (speaker path), which the frame stamp of the mic does not include;
-    // other phones' beeps do not have that lag. Correct my own stamp by it, and report both numbers so the base can see them.
+    // latencies are reported for the base to show, never applied: the emission time is physical, both phones' own-beep and
+    // other-beep stamps share the same input path, so every fixed delay cancels in the two-way difference.
     const outLat = Number.isFinite(ctx.outputLatency) ? ctx.outputLatency : 0, baseLat = Number.isFinite(ctx.baseLatency) ? ctx.baseLatency : 0;
     p.order.forEach((src, j) => {
       const ws = serverToCtx(p.t0 + j * p.slot * 1000) - 0.12, from = Math.round(ws * sr);
       const win = Math.min(0.45, p.slot - 0.02); // the search window must end before the next phone's beep
       const r = Ranging.detectFirst(readRing(from, Math.round(win * sr)), chirp, { frac: p.frac, lookMs: p.lookMs }); // picker settings come with the round
       if (r) { snr[src] = Math.round(r.snr); lvl[src] = Math.round(200 * Math.log10(r.peak + 1e-12)) / 10; } // dB, for device profiles
-      if (r && r.snr > 8) heard[src] = (from + r.sample) / sr; // raw: two-way ranging cancels every fixed delay (field 2026-10-20: subtracting outputLatency added c/2 x latency per phone)
+      if (r && r.snr > P.phones.snr_heard) heard[src] = (from + r.sample) / sr; // raw: two-way ranging cancels every fixed delay. Subtracting outputLatency here added c/2 x latency per phone (0.5 m iOS, 4-7 m Android; field 2026-10-20)
     });
     await api('heard', { id, round: p.round, heard, snr, lvl, lat: { out: outLat, base: baseLat, sr } });
     roundBusy = false;
     const others = p.order.filter(o => o !== id), nameOf = o => (p.names && p.names[o]) || o; // toast: whom I heard, whom I missed
-    if (others.length && !p.walker) toast('Słyszę: ' + others.map(o => nameOf(o) + (Number.isFinite(heard[o]) ? ' ✓' : ' ✗')).join(', '), others.some(o => !Number.isFinite(heard[o])));
-    if (!(snr[id] > 8)) { say('NIE SŁYSZĘ SIEBIE', 'drone', 'stuknij tutaj, żeby włączyć dźwięk'); needTap = true; return; } // output never started (iOS after a reload): a tap fixes it
-    say('Usłyszałem ' + Object.keys(heard).length + ' z ' + n + ' pisków.','ok', LOCATE ? 'wynik na ekranie bazy' : 'teraz nasłuchuję dronów');
+    if (others.length && !p.walker) toast(t('party.run.heard_toast', { list: others.map(o => t(Number.isFinite(heard[o]) ? 'party.run.heard_yes' : 'party.run.heard_no', { name: nameOf(o) })).join(', ') }), others.some(o => !Number.isFinite(heard[o])));
+    if (!(snr[id] > P.phones.snr_heard)) { say(t('party.run.deaf'), 'drone', t('party.run.deaf_sub')); needTap = true; return; } // output never started (iOS after a reload): a tap fixes it
+    say(t('party.run.heard_n', { k: Object.keys(heard).length, n }), 'ok', t(LOCATE ? 'party.run.heard_sub_locate' : 'party.run.heard_sub_show'));
   }, Math.max(0, doneAt - (Date.now() + off)));
 }
 
 function droneMode(p) {
   if (drone) { drone.stop(); drone = null; }
   const me = (p.drones || []).find(d => d.id === id);
-  if (me) { drone = makeDrone(ctx, me.f0); drone.output.connect(out); drone.setGain(0.9); say('JESTEŚ DRONEM', 'drone', 'podnieś telefon, nie zasłaniaj głośnika'); }
-  else if (p.phase === 'drones') say('Nasłuchuję dronów...', 'ok', 'w powietrzu: ' + (p.drones || []).length);
-  else if (lastRound >= 0) say('Na mapie. Nasłuchuję.', 'ok', '');
+  if (me) { drone = makeDrone(ctx, me.f0); drone.output.connect(out); drone.setGain(0.9); say(t('party.run.you_drone'), 'drone', t('party.run.you_drone_sub')); }
+  else if (p.phase === 'drones') say(t('party.run.listening_drones'), 'ok', t('party.run.in_air', { n: (p.drones || []).length }));
+  else if (lastRound >= 0) say(t('party.run.on_map'), 'ok', '');
 }
 
 let lastSent = 0;
@@ -229,9 +233,9 @@ function detectTick() { // comb detector, 12 frames a second: alarm after 6 fram
   const db = new Float32Array(an.frequencyBinCount); an.getFloatFrequencyData(db);
   for (let i = 0; i < db.length; i++) if (!isFinite(db[i])) db[i] = -140;
   const o = det.process(db, ctx.currentTime);
-  $('#detLine').textContent = o.detected ? 'słyszę wirnik: ' + Math.round(o.f0) + ' Hz, ' + o.level.toFixed(0) + ' dB' : o.warming ? 'uczę się tła sali' : 'nasłuch: cisza';
+  $('#detLine').textContent = o.detected ? t('party.det.rotor', { f0: Math.round(o.f0), db: o.level.toFixed(0) }) : o.warming ? t('party.det.learning') : t('party.det.silence');
   $('#detLine').style.color = o.detected ? 'var(--hot)' : '';
-  if (Date.now() - lastDetSent > 500) { lastDetSent = Date.now(); api('detect', { id, det: o.detected, f0: o.f0, level: o.level, score: o.score, warming: o.warming }).catch(() => {}); }
+  if (Date.now() - lastDetSent > PP.send_ms) { lastDetSent = Date.now(); api('detect', { id, det: o.detected, f0: o.f0, level: o.level, score: o.score, warming: o.warming }).catch(() => {}); }
 }
 function listen() { // learn the room while nothing flies; while drones fly, report each drone's level; always: the comb detector
   if (!an) return;
@@ -241,7 +245,7 @@ function listen() { // learn the room while nothing flies; while drones fly, rep
   const flying = droneKey !== '';
   if (!floor) floor = Float32Array.from(db);
   else if (!flying) for (let i = 0; i < db.length; i++) floor[i] += (db[i] - floor[i]) * 0.08;
-  if (!flying || drone || Date.now() - lastSent < 500) return;
+  if (!flying || drone || Date.now() - lastSent < PP.send_ms) return;
   lastSent = Date.now();
   const levels = {}, binHz = sr / an.fftSize;
   for (const d of JSON.parse(droneKey)) levels[d.id] = +Ranging.combLevel(db, floor, binHz, d.f0).toFixed(1);
@@ -249,36 +253,37 @@ function listen() { // learn the room while nothing flies; while drones fly, rep
 }
 // Ton: low tone (+ its octave) until stopped (60 s cap) while a bar shows how loudly my own mic hears it; turn the volume up until green
 let toneOn = null;
-function toneStop() { if (!toneOn) return; const { g, oscs } = toneOn; toneOn = null; try { g.gain.cancelScheduledValues(ctx.currentTime); g.gain.setTargetAtTime(0, ctx.currentTime, 0.03); oscs.forEach(o => o.stop(ctx.currentTime + 0.2)); } catch (e) {} setTimeout(() => { try { g.disconnect(); } catch (e) {} }, 300); $('#tone').textContent = 'Ton'; $('#tone').classList.remove('on'); }
+function toneStop() { if (!toneOn) return; const { g, oscs } = toneOn; toneOn = null; try { g.gain.cancelScheduledValues(ctx.currentTime); g.gain.setTargetAtTime(0, ctx.currentTime, 0.03); oscs.forEach(o => o.stop(ctx.currentTime + 0.2)); } catch (e) {} setTimeout(() => { try { g.disconnect(); } catch (e) {} }, 300); $('#tone').textContent = t('party.tone.button'); $('#tone').classList.remove('on'); }
 async function tone() {
   if (toneOn) { toneStop(); return; }
-  try { await prepare(); } catch (e) { prepared = null; $('#err').textContent = 'Mikrofon zablokowany: ' + e.message + '. Zezwól w ustawieniach przeglądarki i odśwież stronę.'; return; }
-  if (ctx.state !== 'running') { $('#err').textContent = 'Dźwięk zablokowany: stuknij Ton jeszcze raz.'; return; }
-  const t = ctx.currentTime + 0.05, g = ctx.createGain(), oscs = [[330, 0.5], [660, 0.25]].map(([f, a]) => { const o = ctx.createOscillator(), og = ctx.createGain(); o.frequency.value = f; og.gain.value = a; o.connect(og); og.connect(g); o.start(t); o.stop(t + 60.2); return o; });
-  g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(0.9, t + 0.1); g.gain.setValueAtTime(0.9, t + 59.9); g.gain.linearRampToValueAtTime(0, t + 60);
-  g.connect(out); toneOn = { g, oscs }; $('#tone').textContent = 'Stop'; $('#tone').classList.add('on');
-  const td = new Float32Array(an.fftSize), end = performance.now() + 60200;
+  try { await prepare(); } catch (e) { prepared = null; $('#err').textContent = t('party.test.mic_blocked', { err: e.message }); return; }
+  if (ctx.state !== 'running') { $('#err').textContent = t('party.tone.sound_blocked'); return; }
+  const t0 = ctx.currentTime + 0.05, cap = PP.tone_cap_s, g = ctx.createGain(), oscs = [[PP.tone_hz[0], 0.5], [PP.tone_hz[1], 0.25]].map(([f, a]) => { const o = ctx.createOscillator(), og = ctx.createGain(); o.frequency.value = f; og.gain.value = a; o.connect(og); og.connect(g); o.start(t0); o.stop(t0 + cap + 0.2); return o; });
+  g.gain.setValueAtTime(0, t0); g.gain.linearRampToValueAtTime(0.9, t0 + 0.1); g.gain.setValueAtTime(0.9, t0 + cap - 0.1); g.gain.linearRampToValueAtTime(0, t0 + cap);
+  g.connect(out); toneOn = { g, oscs }; $('#tone').textContent = t('party.tone.stop'); $('#tone').classList.add('on');
+  const td = new Float32Array(an.fftSize), end = performance.now() + (cap + 0.2) * 1000;
   (function draw() {
     an.getFloatTimeDomainData(td); let s2 = 0; for (const v of td) s2 += v * v;
-    const db = 20 * Math.log10(Math.sqrt(s2 / td.length) + 1e-9), pct = Math.max(0, Math.min(100, (db + 60) / 50 * 100)); // -60..-10 dBFS
-    $('#meter i').style.width = pct + '%'; $('#meter').classList.toggle('ok', db > -30);
+    const db = 20 * Math.log10(Math.sqrt(s2 / td.length) + 1e-9), pct = Math.max(0, Math.min(100, (db - PP.meter_db_range[0]) / (PP.meter_db_range[1] - PP.meter_db_range[0]) * 100)); // meter_db_range dBFS
+    $('#meter i').style.width = pct + '%'; $('#meter').classList.toggle('ok', db > PP.meter_ok_db);
     if (toneOn && toneOn.g === g && performance.now() < end) requestAnimationFrame(draw); else if (toneOn && toneOn.g === g) toneStop();
   })();
 }
 $('#go').onclick = start; $('#test').onclick = test; $('#tone').onclick = tone;
 // after a hot reload: rejoin by itself (mic permission is already granted for this site; audio may need one tap on iOS, then it says so)
-if (store('dp_joined') === '1' && !LOOP) start().then(() => { needTap = true; say('Słucham. Stuknij raz, żeby głośnik grał w rundach.', 'ok', ''); }).catch(() => {});
+if (store('dp_joined') === '1' && !LOOP) start().then(() => { needTap = true; say(t('party.run.resumed'), 'ok', ''); }).catch(() => {});
 // a tap on the big status (or anywhere on the page) restarts audio output after an automatic rejoin
 let needTap = false;
 document.addEventListener('pointerdown', async () => {
   if (!ctx) return;
   if (needTap) { // output never started: tear the graph down and build it again now, inside the tap
     needTap = false; try { await ctx.close(); } catch (e) {} prepared = null; chunks.length = 0;
-    try { await prepare(); say('Dźwięk włączony. Czekam na następny start.', 'ok', ''); } catch (e) { say('Nie udało się włączyć dźwięku', 'drone', e.message); needTap = true; }
+    try { await prepare(); say(t('party.run.audio_on'), 'ok', ''); } catch (e) { say(t('party.run.audio_failed'), 'drone', e.message); needTap = true; }
     return;
   }
   try { await ctx.resume(); } catch (e) {}
 }, { passive: true });
 document.addEventListener('visibilitychange', () => { if (!document.hidden && ctx) ctx.resume(); });
+});
 </script>
 </html>

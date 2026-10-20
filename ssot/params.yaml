@@ -1,0 +1,76 @@
+# Facts and thresholds. No user-facing text here (that is ui.yaml) and no step logic (that is flow.yaml).
+# Edit, then run: node tools/build_ssot.js   (from the project folder)
+
+phones:
+  min_for_map: 3            # the map and the guide need this many live phones
+  min_for_rollcall: 2       # a roll call with fewer phones measures nothing
+  live_age_s: 20            # a phone not seen for this long has left
+  latency_age_s: 60         # the latency table lists phones seen within this window
+  snr_heard: 8              # a beep with SNR above this counts as heard
+  zero_pair_m: 0.05         # tape value at or below this = phones lie in one pile
+  not_pile_raw_m: 1         # a "pile" pair whose beeps say more than this is not a pile
+
+rollcall:
+  touch_rounds: 2           # rounds per phone laid next to the reference
+  measure_rounds: 5         # rounds in one "Mierz"
+  pile_rounds: 3            # rounds in "Stos: kalibruj"
+  settle_ms: 2500           # extra wait after a round's expected end
+  start_delay_ms: 4000      # the hub starts a normal round this long after the command
+  pile_wait_ms: 7000        # gap between pile rounds
+  collect_timeout_ms: 15000 # how long a measurement waits for the last results
+  walker_slot_s: 0.25
+  ok_mean_error_cm: 30      # mean error against the tape that still counts as OK
+  median_rounds: 5          # distances are medians over this many full rounds
+  temp_default_c: 21
+  slot_default: "0.5"
+  frac_default: "0.3"
+  gain_default: "0.6"
+  band_default: mid
+
+# Band names as the select sends them. The hub (party.php) owns the ranges; keep both equal
+# (tests/ssot.test.js compares them). Phones fall back to fallback_band when their sample rate is too low.
+bands:
+  mid: [2000, 6000]
+  high: [8000, 12000]
+  quiet: [14000, 18000]
+fallback_band: [8000, 12000]
+band_margin_hz: 500
+
+map:
+  long_press_ms: 600        # long press on a dot = mark it as the walker
+  tap_radius_px: 22
+  dead_zone_m: 0.06         # position filter: a change above this is a real move
+  filter_gain: 0.35
+  touch_raw_max_m: 0.15     # walker rounds: a phone reading less than this raw distance was touched
+  trail_max: 40
+  poll_ms: 1000
+  poll_walker_ms: 250
+
+detection:
+  fresh_s: 3                # a phone's detector report older than this is ignored
+  pitch_tolerance: 0.05     # phones within 5 % of the median pitch vote together
+  min_nodes_for_fix: 3
+  fix_hold_s: 4             # keep a fix this long after the last one
+
+toasts:
+  check_ms: 6000
+  party_ms: 8000
+
+phone:
+  test_min_rise_db: 10      # Test: own microphone must hear the whistle this much above the room
+  test_listen_ms: 400
+  test_sweep_hz: [2000, 4000]
+  test_gain: 0.8
+  tone_hz: [330, 660]
+  tone_cap_s: 60
+  meter_db_range: [-60, -10]
+  meter_ok_db: -30          # the bar turns green above this level
+  poll_ms: 1000
+  listen_ms: 250
+  coach_ms: 500
+  detect_ms: 80
+  send_ms: 500
+  coach_ok_deg: 15
+  reload_delay_ms: 800
+  name_max: 24
+  pose_ms: 2000             # compass heading is sent at most this often

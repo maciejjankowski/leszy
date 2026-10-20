@@ -1,6 +1,6 @@
 <!doctype html>
 <html lang="pl"><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Wielki Leszy - baza</title>
+<title data-ssot="check.title"></title>
 <link rel="stylesheet" href="style.css">
 <style>
   body { overflow-x: hidden; }
@@ -21,6 +21,8 @@
   td.dead { color: #fff; background: var(--hot); font-weight: bold; }
   td.ok { color: var(--ok); } td.bad { color: var(--hot); } td.self { color: var(--dim); }
   input.tape { width: 4.5em; padding: .2em; }
+  button.hot { border-color: var(--hot); color: var(--hot); }
+  #countCap { margin: 0; }
   #toasts { position: fixed; right: 12px; bottom: max(12px, env(safe-area-inset-bottom)); display: flex; flex-direction: column; gap: 6px; z-index: 50; max-width: min(90vw, 340px); }
   .toast { background: #eeece6; border: 1px solid var(--ok); color: var(--fg); padding: 8px 12px; border-radius: 10px; font-size: .9em; box-shadow: 0 4px 14px rgba(0,0,0,.4); animation: tin .25s ease-out; }
   .toast.warn { border-color: var(--warn); }
@@ -28,61 +30,71 @@
 </style>
 <div class="layout">
   <main>
+    <h1 data-ssot="check.h1"></h1>
     <div id="guide" class="card" style="margin-top:0;border-color:var(--accent)">
       <p class="muted" id="gStep" style="margin:0"></p>
       <h2 id="gTitle" style="margin:.15em 0 .3em;font-size:1.2em"></h2>
       <p id="gText" style="margin:.2em 0 .6em"></p>
-      <div class="row"><button class="big" id="gBtn" hidden></button><button id="gSkip" hidden>Pomiń ten telefon</button><button id="gDetect" class="big" hidden style="border-color:var(--hot);color:var(--hot)">Detekcja dronów</button><button id="gSkipAll" hidden>Pomiń kalibrację</button><span id="gStat"></span></div>
-      <p class="row" id="gRefRow" hidden><label>Węzeł odniesienia <select id="gRef"></select></label></p>
+      <div class="row"><button class="big" id="gBtn" hidden></button><span id="gStat"></span></div>
+      <div class="row" id="gMore" style="margin-top:8px"></div>
+      <p class="row" id="gRefRow" hidden><label><span data-ssot="guide.ref_label"></span> <select id="gRef"></select></label></p>
       <p id="detStatus" style="margin:.4em 0 0;font-weight:600"></p>
+      <p id="net" style="margin:.4em 0 0;color:var(--hot)"></p>
     </div>
-    <div id="qrBox"><div id="qr"></div><div id="count">0</div></div>
-    <details id="settings"><summary>Ręcznie: Start, Ciągle, ustawienia</summary>
-    <div class="row"><button class="big" id="go" style="flex:1">Start</button><button id="loop" title="Rundy jedna po drugiej, mapa się odświeża">Ciągle</button></div>
+    <div id="qrBox"><p class="muted" data-ssot="check.qr.caption" style="margin:0 0 6px"></p><div id="qr"></div><div id="count">0</div><p class="muted" id="countCap"></p></div>
+    <details id="settings"><summary data-ssot="check.settings.summary"></summary>
+    <div class="row"><button class="big" id="go" style="flex:1" data-ssot="check.settings.start"></button><button id="loop" data-ssot="check.settings.loop" data-ssot-attr="title:check.settings.loop_title"></button></div>
     <p class="muted" id="status" style="text-align:center"></p>
-      <p class="row"><label>Pasmo pisku <select id="band"><option value="mid">średnie 2-6 kHz: słyszalne, omija ludzi</option><option value="high">wysokie 8-12 kHz</option><option value="quiet">ciche 14-18 kHz: ledwo słyszalne, krótszy zasięg</option></select></label></p>
-      <p class="row"><label>Temperatura <input id="temp" type="number" step="1" style="width:4em"> °C</label> <span class="muted" id="cspeed"></span></p>
-      <p class="row"><label>Próg pierwszego piku <select id="frac"><option value="0.5">50% (domyślnie)</option><option value="0.3">30%</option><option value="0.2">20%</option><option value="0.1">10%</option></select></label> <span class="muted">niżej = łapie cichszą drogę bezpośrednią przed głośnym odbiciem</span></p>
-      <p class="row"><label>Głośność pisku <select id="gain"><option value="0.3">30%</option><option value="0.6">60% (domyślnie)</option><option value="0.9">90%</option></select></label> <span class="muted">słabe głośniki brzęczą przy 90%; wystarczy, żeby wszyscy się słyszeli</span></p>
-      <p class="row"><label>Pisk co <select id="slot"><option value="0.5">0,5 s</option><option value="1">1 s</option><option value="2">2 s</option></select></label> <span class="muted">dłuższy odstęp = mniej nakładania się ech</span></p>
+      <p class="row"><label><span data-ssot="check.settings.band"></span> <select id="band"><option value="mid" data-ssot="check.settings.band_mid"></option><option value="high" data-ssot="check.settings.band_high"></option><option value="quiet" data-ssot="check.settings.band_quiet"></option></select></label></p>
+      <p class="row"><label><span data-ssot="check.settings.temp"></span> <input id="temp" type="number" step="1" style="width:4em"> <span data-ssot="check.settings.temp_unit"></span></label> <span class="muted" id="cspeed"></span></p>
+      <p class="row"><label><span data-ssot="check.settings.frac"></span> <select id="frac"><option value="0.5" data-ssot="check.settings.frac_50"></option><option value="0.3" data-ssot="check.settings.frac_30"></option><option value="0.2" data-ssot="check.settings.frac_20"></option><option value="0.1" data-ssot="check.settings.frac_10"></option></select></label> <span class="muted" data-ssot="check.settings.frac_help"></span></p>
+      <p class="row"><label><span data-ssot="check.settings.gain"></span> <select id="gain"><option value="0.3" data-ssot="check.settings.gain_30"></option><option value="0.6" data-ssot="check.settings.gain_60"></option><option value="0.9" data-ssot="check.settings.gain_90"></option></select></label> <span class="muted" data-ssot="check.settings.gain_help"></span></p>
+      <p class="row"><label><span data-ssot="check.settings.slot"></span> <select id="slot"><option value="0.5" data-ssot="check.settings.slot_05"></option><option value="1" data-ssot="check.settings.slot_1"></option><option value="2" data-ssot="check.settings.slot_2"></option></select></label> <span class="muted" data-ssot="check.settings.slot_help"></span></p>
     </details>
-    <p class="label">Mapa: gdzie są telefony</p>
+    <p class="label" data-ssot="check.map.label"></p>
     <canvas id="map"></canvas>
     <p class="muted" id="fit" style="text-align:center"></p>
+    <p class="muted" data-ssot="check.map.hint" style="text-align:center"></p>
   </main>
   <aside>
-    <p class="label">Kto kogo usłyszał</p>
-    <p class="muted" style="font-size:.75em">wiersz słucha, kolumna piszczy · poniżej 8 = nie usłyszał</p>
+    <p class="label" data-ssot="check.matrix.label"></p>
+    <p class="muted" id="matrixHelp"></p>
     <div class="grid" id="matrix"></div>
-    <p class="label">Kalibracja</p>
-    <p class="muted" style="font-size:.75em"><b>Zasada:</b> każdy telefon ma stałe opóźnienie dźwięku ustalane przy załadowaniu strony (po każdym przeładowaniu inne, 0,5-5 m w odległości). Dlatego: dołączyć wszystkie, zrobić <b>stos</b> (przycisk niżej, 3 rundy), potem rozstawić i nie przeładowywać. Przeładował się telefon = nowy stos.</p>
-    <p class="muted" style="font-size:.75em">Stos ręczny: połóż 2+ telefony razem i stuknij je po kolei na mapie. Albo wpisz taśmą 1-2 odległości poniżej.</p>
-    <p class="muted" id="zeroList" style="font-size:.75em"></p>
-    <p class="muted" style="font-size:.75em">Albo: przytrzymaj telefon na mapie, żeby oznaczyć go jako <b>idący</b>. W trybie Ciągle idący piszczy pierwszy, reszta szybko odpowiada (runda ~3 s), mapa reszty stoi, a idący rysuje ślad i odległość od startu. Przesuń go o znaną odległość i porównaj.</p>
-    <p class="muted" id="walkInfo" style="font-size:.75em"></p>
-    <p class="muted" style="font-size:.75em"><b>Obchód dotykowy:</b> w trybie Ciągle przyłóż idący telefon do każdego urządzenia na ~3 s. Każdy dotyk kalibruje odległość i głośność tego urządzenia względem idącego.</p>
-    <p class="muted" id="tour" style="font-size:.75em"></p>
-    <p class="muted" id="cal" style="font-size:.75em"></p>
-    <p class="label">Opóźnienie audio</p>
-    <p class="muted" style="font-size:.75em">Co każdy telefon zgłasza o swojej ścieżce dźwięku (wyjście = głośnik, baza = wejście). Odejmowane od znacznika własnego pisku.</p>
+    <p class="label" data-ssot="check.calibration.label"></p>
+    <p class="muted" id="cal"></p>
+    <p class="muted" id="zeroList"></p>
+    <p class="muted" id="walkInfo"></p>
+    <p class="muted" id="tour"></p>
+    <details><summary class="muted" data-ssot="check.calibration.summary"></summary>
+    <p class="muted" data-ssot="check.calibration.rule"></p>
+    <p class="muted" data-ssot="check.calibration.pile"></p>
+    <p class="muted" data-ssot="check.calibration.walker"></p>
+    <p class="muted" data-ssot="check.calibration.tour"></p>
+    </details>
+    <p class="label" data-ssot="check.latency.label"></p>
+    <p class="muted" data-ssot="check.latency.help"></p>
     <div class="grid" id="latency"></div>
-    <p class="label">Profil głośności</p>
-    <p class="muted" style="font-size:.75em">Względem pierwszego telefonu z par "zero": o ile głośniej gra (głośnik) i słyszy (mikrofon).</p>
+    <p class="label" data-ssot="check.profile.label"></p>
+    <p class="muted" data-ssot="check.profile.help"></p>
     <div class="grid" id="profile"></div>
-    <p class="label">Odległości</p>
-    <p class="muted" style="font-size:.75em">wpisz zmierzoną taśmą, zobaczysz błąd</p>
+    <p class="label" data-ssot="check.pairs.label"></p>
+    <p class="muted" data-ssot="check.pairs.help"></p>
     <div class="grid" id="pairs"></div>
-    <p class="row" style="margin-top:14px"><a id="selfJoin" target="_blank" rel="noopener">Dołącz tym urządzeniem</a> · <button id="reset">Nowa runda</button> · <button id="pileBtn" title="Wszystkie urządzenia na jednym stosie: 3 rundy, baza liczy poprawkę każdego">Stos: kalibruj</button> · <button id="clearCal">Wyczyść kalibrację</button></p>
-    <p class="row"><input id="note" placeholder="notatka: układ, taśma, co testuję" size="34"> <button id="saveLog" title="Zapisuje do dziennika na serwerze: odległości z pisków, taśmę, poprawki, notatkę">Zapisz pomiar</button> <span class="muted" id="saved"></span></p>
+    <p class="row" style="margin-top:14px"><a id="selfJoin" target="_blank" rel="noopener" data-ssot="check.actions.join_here"></a> · <button id="reset" data-ssot="check.actions.reset" data-ssot-attr="title:check.actions.reset_title"></button> · <button id="pileBtn" data-ssot="check.actions.pile" data-ssot-attr="title:check.actions.pile_title"></button> · <button id="clearCal" data-ssot="check.actions.clear_cal" data-ssot-attr="title:check.actions.clear_cal_title"></button></p>
+    <p class="row"><input id="note" size="34" data-ssot-attr="placeholder:check.actions.note_ph"> <button id="saveLog" data-ssot="check.actions.save" data-ssot-attr="title:check.actions.save_title"></button> <span class="muted" id="saved"></span></p>
     <p class="muted" id="url" style="word-break:break-all;font-size:.7em"></p>
   </aside>
 </div>
 <div id="toasts"></div>
+<script src="ssot.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 <script src="ranging.js"></script>
 <script src="fusion.js"></script>
+<script src="guide.js"></script>
 <script>
-const $ = s => document.querySelector(s), ROOM = 'test';
+SSOT.ready.then(() => { // every string and threshold below comes from ssot/*.yaml
+const $ = s => document.querySelector(s), ROOM = 'test', t = SSOT.t, P = SSOT.params, R = P.rollcall, PH = P.phones, DT = P.detection;
+const sleep = ms => new Promise(r => setTimeout(r, ms));
 const hub = (a, body) => fetch('party.php?a=' + a + '&room=' + ROOM, body ? { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) } : { cache: 'no-store' }).then(r => r.json());
 const joinUrl = location.href.replace(/check\.html.*$/, 'party.html') + '?room=' + ROOM;
 (async () => { // the QR carries this demo's join PIN when the gate allows it, so guests type nothing
@@ -91,14 +103,14 @@ const joinUrl = location.href.replace(/check\.html.*$/, 'party.html') + '?room='
   $('#url').textContent = u;
   $('#selfJoin').href = u; // join with this device in a new window
   const w = Math.min(260, innerWidth - 80);
-  try { new QRCode($('#qr'), { text: u, width: w, height: w }); } catch (e) {}
+  try { new QRCode($('#qr'), { text: u, width: w, height: w }); } catch (e) { $('#qr').textContent = t('check.qr.missing') + ' ' + u; }
 })();
-$('#go').onclick = () => hub('admin', { cmd: 'rollcall', band: $('#band').value, slot: walker ? 0.25 : +$('#slot').value, walker: walker || '', frac: +$('#frac').value, gain: +$('#gain').value }).then(j => {
+$('#go').onclick = () => hub('admin', { cmd: 'rollcall', band: $('#band').value, slot: walker ? R.walker_slot_s : +$('#slot').value, walker: walker || '', frac: +$('#frac').value, gain: +$('#gain').value }).then(j => {
   const n = j.party.order.length;
-  $('#status').textContent = n < 2 ? 'Potrzeba co najmniej 3 telefonów.' : 'Piszczą... ' + Math.round(n * (+$('#slot').value) + 5) + ' s ciszy';
+  $('#status').textContent = n < PH.min_for_rollcall ? t('check.status.need_phones', { need: PH.min_for_rollcall }) : t('check.status.beeping', { s: Math.round(n * (+$('#slot').value) + 5) });
 });
-$('#pileBtn').onclick = async () => { pileCal = { rounds: [], need: 3 }; toast('Stos: 3 rundy, nie ruszać'); for (let i = 0; i < 3; i++) { await hub('admin', { cmd: 'rollcall', band: $('#band').value, slot: +$('#slot').value, frac: +$('#frac').value, gain: +$('#gain').value }); await new Promise(r => setTimeout(r, 7000)); } };
-$('#saveLog').onclick = async () => { if (!lastSnap) { toast('Jeszcze nie ma rundy do zapisania', true); return; } try { await hub('log', { kind: 'map', note: $('#note').value.trim(), ...lastSnap }); $('#saved').textContent = 'zapisano ' + new Date().toLocaleTimeString(); } catch (e) { toast('Nie zapisano: ' + e.message, true); } };
+$('#pileBtn').onclick = async () => { pileCal = { rounds: [], need: R.pile_rounds }; toast(t('check.toast.pile_start', { n: R.pile_rounds })); for (let i = 0; i < R.pile_rounds; i++) { await hub('admin', { cmd: 'rollcall', band: $('#band').value, slot: +$('#slot').value, frac: +$('#frac').value, gain: +$('#gain').value }); await sleep(R.pile_wait_ms); } };
+$('#saveLog').onclick = async () => { if (!lastSnap) { toast(t('check.toast.no_round'), true); return; } try { await hub('log', { kind: 'map', note: $('#note').value.trim(), ...lastSnap }); $('#saved').textContent = t('check.actions.saved', { time: new Date().toLocaleTimeString() }); } catch (e) { toast(t('check.toast.not_saved', { err: e.message }), true); } };
 $('#clearCal').onclick = () => { tape = {}; touches = {}; pileOff = {}; store('dp_pileoff', '{}'); store('dp_tape', '{}'); store('dp_touch', '{}'); last = ''; };
 $('#reset').onclick = () => { hub('admin', { cmd: 'reset' }); last = ''; walker = null; trail = []; view = null; target = null; frozen = null; shown = {}; for (const k of Object.keys(filt)) delete filt[k]; };
 let loop = false, loopBusy = false;
@@ -106,84 +118,135 @@ $('#loop').onclick = () => { loop = !loop; $('#loop').classList.toggle('on', loo
 // Detection on the calibrated map: phones that hear a rotor at the same pitch (within 5 %) vote with their level; 3+ placed phones give a fix.
 function detection(d, p) {
   const now = d.t / 1000; p.now = now; const nmOf = i => (p.names && p.names[i]) || (d.members.find(m => m.id === i) || {}).name || i;
-  const fresh = d.members.filter(m => m.det && now - m.det.t < 3);
+  const fresh = d.members.filter(m => m.det && now - m.det.t < DT.fresh_s);
   const heard = fresh.filter(m => m.det.det);
   let f0 = null; if (heard.length) { const fs = heard.map(m => m.det.f0).sort((a, b) => a - b); f0 = fs[fs.length >> 1]; }
-  hearing = heard.filter(m => Math.abs(m.det.f0 - f0) / f0 < 0.05).map(m => m.id);
+  hearing = heard.filter(m => Math.abs(m.det.f0 - f0) / f0 < DT.pitch_tolerance).map(m => m.id);
   const nodes = hearing.filter(i => target && target[i]).map(i => ({ x: target[i].x, y: target[i].y, level: fresh.find(m => m.id === i).det.level }));
-  const fix = nodes.length >= 3 ? Fusion.localize(nodes) : null;
+  const fix = nodes.length >= DT.min_nodes_for_fix ? Fusion.localize(nodes) : null;
   if (fix) { if (!tracker) tracker = new Fusion.Tracker(1); const tr = tracker.update(now, fix); droneFix = { x: tr.x, y: tr.y, err: fix.err, speed: tr.speed, heading: tr.heading, f0, t: now }; }
-  else if (droneFix && now - droneFix.t > 4) { droneFix = null; tracker = null; }
+  else if (droneFix && now - droneFix.t > DT.fix_hold_s) { droneFix = null; tracker = null; }
   const st = $('#detStatus');
-  if (!fresh.length) { st.textContent = ''; return; }
+  if (!fresh.length) { st.textContent = ''; st.hidden = true; return; }
   st.style.color = hearing.length ? 'var(--hot)' : 'var(--dim)';
-  st.textContent = hearing.length ? 'DRON · słyszy: ' + hearing.map(nmOf).join(', ') + ' · ' + Math.round(f0) + ' Hz' + (droneFix ? ' · namiar (' + droneFix.x.toFixed(1) + ', ' + droneFix.y.toFixed(1) + ') ±' + droneFix.err.toFixed(1) + ' m, ' + droneFix.speed.toFixed(1) + ' m/s' : nodes.length < 3 ? ' · do namiaru potrzeba 3 telefonów z mapy' : '')
-    : 'nasłuch: cisza (' + fresh.length + ' tel.)';
+  st.hidden = detectMode || !hearing.length; // in detect mode the strip itself says it; during calibration only an alarm interrupts
+  st.textContent = hearing.length ? t('detect.drone', { list: hearing.map(nmOf).join(', '), f0: Math.round(f0) }) + (droneFix ? t('detect.fix', { x: droneFix.x.toFixed(1), y: droneFix.y.toFixed(1), err: droneFix.err.toFixed(1), speed: droneFix.speed.toFixed(1) }) : nodes.length < DT.min_nodes_for_fix ? t('detect.need_map', { need: DT.min_nodes_for_fix }) : '')
+    : t('detect.silence', { n: fresh.length });
 }
-// Guided flow: one step, one physical instruction, one button. Derived from the same state the rest of the page uses.
+// Guided flow. The states, their buttons and the order they come in are in ssot/flow.yaml (Guide.view reads it);
+// this part draws the strip and runs the actions the flow names. Detection is one press away from every state.
+let skipped = { join: false }, forced = null, runId = 0, lastLive = null, lastP = null, moreSig = '', gCtx = { ref: null, uncal: [], liveIds: [] };
+function abortRun() { runId++; measure = null; if (touchCal) touchCal.busy = 0; } // a running loop notices the new runId and stops
+const ACT = {
+  detect() { abortRun(); forced = null; detectMode = true; store('dp_mode', 'detect'); },
+  back_to_calibration() { detectMode = false; store('dp_mode', ''); },
+  skip_join() { skipped.join = true; forced = null; },
+  join_next() { skipped.join = true; forced = null; },
+  back_home(a) { location.href = a.href; },
+  back_to_join() { forced = 'join'; skipped.join = false; },
+  back_to_touch() { // measure the phones again, one by one, against the same reference
+    const ref = gCtx.ref, queue = gCtx.liveIds.filter(i => i !== ref);
+    if (!queue.length) { ACT.back_to_join(); return; }
+    touchCal = { ref, queue, cur: queue[0], busy: 0 };
+  },
+  skip_phone() { // leave this phone as it is; it is not asked again until it rejoins
+    if (!touchCal) return; const cur = touchCal.cur;
+    if (cur && touches[cur] === undefined && pileOff[cur] === undefined) { touches[cur] = { walker: touchCal.ref, raw: PH.zero_pair_m, round: 0, t: Date.now(), skipped: true }; store('dp_touch', JSON.stringify(touches)); }
+    touchCal.queue.shift(); touchCal.cur = touchCal.queue[0]; if (!touchCal.cur) touchCal = null;
+  },
+  skip_all() { // skipped phones keep whatever map position they had
+    for (const i of gCtx.uncal) touches[i] = { walker: gCtx.ref, raw: PH.zero_pair_m, round: 0, t: Date.now(), skipped: true };
+    touchCal = null; store('dp_touch', JSON.stringify(touches));
+  },
+  cancel_run() { abortRun(); },
+  touch_measure() { return runTouch(); },
+  measure_run() { return runMeasure(); },
+};
+function doAction(a) { const r = ACT[a.id](a); last = ''; redraw(); return r; }
+function redraw() { if (lastLive) guide(lastLive, lastP); }
+$('#gRef').onchange = () => { touchCal = null; last = ''; redraw(); }; // another reference phone: start the queue again
 function guide(live, p) {
+  lastLive = live; lastP = p;
   const liveIds = live.map(m => m.id), nmOf = i => (p.names && p.names[i]) || (live.find(m => m.id === i) || {}).name || i;
-  const ref = touchCal ? touchCal.ref : ($('#gRef').value && liveIds.includes($('#gRef').value) ? $('#gRef').value : liveIds[0]);
+  const sel = $('#gRef');
+  const ref = touchCal ? touchCal.ref : (sel.value && liveIds.includes(sel.value) ? sel.value : liveIds[0]);
   const uncal = liveIds.filter(i => i !== ref && !(touches[i] && touches[i].walker === ref) && pileOff[i] === undefined);
-  let step, title, text, btn = null, stat = '', act = null, skip = false;
-  $('#gRefRow').hidden = !(live.length >= 3 && uncal.length && !touchCal);
-  if (!touchCal) { const sel = $('#gRef'); const have = [...sel.options].map(o => o.value).join(','); if (have !== liveIds.join(',')) { sel.innerHTML = liveIds.map(i => '<option value="' + i + '">' + nmOf(i) + '</option>').join(''); if (liveIds.includes(ref)) sel.value = ref; } }
-  if (detectMode) {
-    step = 4; title = hearing.length ? 'DRON' : 'DETEKCJA: nasłuch'; btn = 'Wróć do kalibracji'; act = () => { detectMode = false; store('dp_mode', ''); last = ''; };
-    text = hearing.length ? $('#detStatus').textContent : 'Telefony leżą na swoich miejscach i słuchają. Czerwony pierścień = słyszy wirnik; namiar, gdy słyszą 3 z mapy.';
-    stat = 'słucha: ' + live.filter(m => m.det && (p.now || Date.now() / 1000) - m.det.t < 3).length + ' z ' + live.length;
-    $('#gRefRow').hidden = true; $('#gSkip').hidden = true;
-    $('#gStep').textContent = 'TRYB: DETEKCJA'; $('#gTitle').textContent = title; $('#gTitle').style.color = hearing.length ? 'var(--hot)' : ''; $('#gText').textContent = text; $('#gStat').textContent = stat;
-    const b = $('#gBtn'); b.hidden = false; b.textContent = btn; b.onclick = act; return;
-  }
-  $('#gTitle').style.color = '';
-  if (live.length < 3) { step = 1; title = 'Dołącz telefony'; text = 'Każdy telefon: zeskanuj kod niżej, wpisz imię, stuknij Dołącz, potem Ton i podgłaśniaj, aż pasek będzie zielony. Potrzeba co najmniej 3.'; stat = 'dołączyło: ' + live.length; }
-  else if (touchCal && touchCal.busy) { step = 2; title = 'Mierzę: ' + nmOf(touchCal.cur) + ' przy ' + nmOf(touchCal.ref); text = 'Nie ruszać. Dwie rundy, około 25 s.'; stat = 'runda ' + touchCal.busy + ' z 2'; }
-  else if (touchCal || uncal.length) {
+  gCtx = { ref, uncal, liveIds };
+  if ([...sel.options].map(o => o.value).join(',') !== liveIds.join(',')) { sel.textContent = ''; for (const i of liveIds) sel.appendChild(new Option(nmOf(i), i)); if (liveIds.includes(ref)) sel.value = ref; }
+  const env = { live: live.length, uncal: uncal.length, touchActive: !!touchCal, run: touchCal && touchCal.busy ? 'touch' : measure ? 'measure' : null, detectMode, forced, skipped };
+  const v = Guide.view(SSOT.flow, env, P);
+  if (v.id === 'touch-calibrate' && !v.busy) {
     if (!touchCal) touchCal = { ref, queue: uncal.slice(), cur: uncal[0], busy: 0 };
-    if (!liveIds.includes(touchCal.cur)) { touchCal.queue.shift(); touchCal.cur = touchCal.queue[0]; }
+    if (touchCal.cur && !liveIds.includes(touchCal.cur)) { touchCal.queue = touchCal.queue.filter(i => liveIds.includes(i)); touchCal.cur = touchCal.queue[0]; }
     if (!touchCal.cur) { touchCal = null; last = ''; return guide(live, p); }
-    step = 2; title = 'Weź ' + nmOf(touchCal.cur) + ' i połóż go tuż przy ' + nmOf(touchCal.ref);
-    text = 'Krawędź przy krawędzi, oba ekranem do góry, reszta telefonów może leżeć gdziekolwiek. Naciśnij Zmierz. Potem odłóż ' + nmOf(touchCal.cur) + ' na miejsce i weź następny.';
-    btn = 'Zmierz (2 rundy)'; act = runTouch; skip = true; stat = 'zostało: ' + touchCal.queue.map(nmOf).join(', ') + (pileRes != null ? ' · ' + pileRes : '');
   }
-  else if (measure) { step = 3; title = 'Mierzę'; text = 'Nie ruszać telefonów. Pięć rund.'; stat = 'runda ' + Math.min(measure.rounds.length + 1, measure.need) + ' z ' + measure.need; }
-  else { step = 3; title = 'Rozstaw telefony i zmierz'; text = 'Ustaw telefony w zadanym rozstawie (np. 50 cm między sąsiadami). Taśmą zmierz 2-3 pary i wpisz je w tabeli "Odległości" po prawej. Naciśnij Mierz: 5 rund, wynik i zapis do dziennika. Potem zmień rozstaw i powtórz.'; btn = 'Mierz (5 rund)'; act = runMeasure; stat = lastResult || (pileRes != null ? String(pileRes) : ''); }
-  $('#gStep').textContent = 'KROK ' + step + ' z 3'; $('#gTitle').textContent = title; $('#gText').textContent = text; $('#gStat').textContent = stat;
-  const b = $('#gBtn'); b.hidden = !btn; if (btn) { b.textContent = btn; b.onclick = act; }
-  const go = $('#gDetect'); go.hidden = !!measure || !!(touchCal && touchCal.busy); // detection is always one press away; calibration is never a gate go.onclick = () => { detectMode = true; store('dp_mode', 'detect'); last = ''; };
-  const sa = $('#gSkipAll'); sa.hidden = step !== 2 || !!(touchCal && touchCal.busy); sa.onclick = () => { for (const i of uncal) touches[i] = { walker: ref, raw: 0.05, round: 0, t: Date.now(), skipped: true }; touchCal = null; store('dp_touch', JSON.stringify(touches)); last = ''; }; // skipped phones keep whatever map position they had
-  const sk = $('#gSkip'); sk.hidden = !skip; sk.onclick = () => { if (!touchCal) return; touchCal.queue.shift(); touchCal.cur = touchCal.queue[0]; if (!touchCal.cur) touchCal = null; last = ''; };
+  const tr = R.touch_rounds, listening = live.filter(m => m.det && (p.now || Date.now() / 1000) - m.det.t < DT.fresh_s).length;
+  const vars = v.id === 'join' ? { n: live.length, need: PH.min_for_map }
+    : v.id === 'touch-calibrate' ? (v.busy ? { cur: nmOf(touchCal.cur), ref: nmOf(touchCal.ref), i: touchCal.busy, n: tr, s: Math.round(tr * (R.start_delay_ms + 6 * (+$('#slot').value) * 1000 + R.settle_ms) / 1000) } : { cur: nmOf(touchCal.cur), ref: nmOf(touchCal.ref), queue: touchCal.queue.map(nmOf).join(', '), n: tr })
+    : v.id === 'measure' ? (v.busy ? { i: Math.min(measure.rounds.length + 1, measure.need), n: measure.need, s: Math.round(measure.need * (R.start_delay_ms + 6 * (+$('#slot').value) * 1000 + R.settle_ms) / 1000) } : { n: R.measure_rounds })
+    : { n: listening, total: live.length, need: DT.min_nodes_for_fix };
+  const drone = v.id === 'detect' && hearing.length > 0;
+  $('#gStep').textContent = v.step ? t('guide.step', { n: v.step, total: v.total }) : t('guide.step_detect');
+  $('#gTitle').textContent = t(drone ? v.titleAlt : v.title, vars); $('#gTitle').style.color = drone ? 'var(--hot)' : '';
+  $('#gText').textContent = drone ? $('#detStatus').textContent : t(v.instruction, vars);
+  const extra = v.busy ? '' : v.id === 'touch-calibrate' ? (pileRes != null ? String(pileRes) : '') : v.id === 'measure' ? (lastResult || (pileRes != null ? String(pileRes) : '')) : '';
+  $('#gStat').textContent = [v.status ? t(v.status, vars) : '', extra].filter(Boolean).join(' · ');
+  const b = $('#gBtn'); b.hidden = !v.primary;
+  if (v.primary) { b.textContent = t(v.primary.label, vars); b.disabled = !v.primary.enabled; b.onclick = () => doAction(v.primary); }
+  const labels = v.secondary.map(a => t(a.label, vars)), sig = v.id + (v.busy ? '!' : '') + v.secondary.map((a, i) => a.id + labels[i]).join('|');
+  if (sig !== moreSig) { // rebuild the secondary buttons only when the set changes, so a tap is never lost to a redraw
+    moreSig = sig; const box = $('#gMore'); box.textContent = '';
+    v.secondary.forEach((a, i) => { const el = document.createElement('button'); el.textContent = labels[i]; el.dataset.act = a.id; if (a.id === 'detect') el.className = 'big hot'; el.onclick = () => doAction(a); box.appendChild(el); });
+  }
+  $('#gRefRow').hidden = !(v.id === 'touch-calibrate' && !v.busy && touchCal && !touchCal.started && live.length >= 2);
 }
 // one phone next to the reference: two rounds, raw two-way distance ref-phone, offset relative to the reference (which counts as zero)
 async function runTouch() {
   const tc = touchCal; if (!tc || tc.busy) return;
-  const slot = +$('#slot').value, start = (await hub('data')).party.round;
-  for (let i = 1; i <= 2; i++) { tc.busy = i; last = ''; await hub('admin', { cmd: 'rollcall', band: $('#band').value, slot, frac: +$('#frac').value, gain: +$('#gain').value }); await new Promise(r => setTimeout(r, 4000 + 6 * slot * 1000 + 2500)); }
-  const d = await hub('data'), c = Ranging.soundSpeed(+$('#temp').value || 21), raws = [];
-  for (const r of [start + 1, start + 2]) {
-    const heard = {}; for (const m of d.members) { const h = m.round === r ? m.heard : (m.prev || []).find(x => x && x.round === r); if (h) heard[m.id] = h.heard || h; }
-    if (heard[tc.ref] && heard[tc.cur]) for (const x of Ranging.pairDistances([tc.ref, tc.cur], heard, { c })) raws.push(x.raw);
-  }
-  tc.busy = 0;
-  if (!raws.length) { toast('Nie usłyszały się: sprawdź dźwięk na ' + (p => p)(tc.cur) + ', spróbuj jeszcze raz', true); last = ''; return; }
-  const raw = raws.length > 1 ? (raws[0] + raws[1]) / 2 : raws[0];
-  touches[tc.cur] = { walker: tc.ref, raw, round: start + 2, t: Date.now() }; delete pileOff[tc.cur]; delete pileOff[tc.ref]; store('dp_touch', JSON.stringify(touches)); store('dp_pileoff', JSON.stringify(pileOff));
-  pileRes = 'ostatni dotyk: ' + (raw * 100).toFixed(0) + ' cm surowo' + (raws.length > 1 ? ', rozrzut ' + (Math.abs(raws[0] - raws[1]) * 100).toFixed(0) + ' cm' : '');
-  tc.queue.shift(); tc.cur = tc.queue[0]; if (!tc.cur) { touchCal = null; pileRes = 'kalibracja przez dotyk gotowa'; }
-  last = '';
+  const my = ++runId, slot = +$('#slot').value, band = $('#band').value, frac = +$('#frac').value, gain = +$('#gain').value;
+  try {
+    const start = (await hub('data')).party.round; tc.started = true;
+    for (let i = 1; i <= R.touch_rounds; i++) {
+      if (my !== runId) return;
+      tc.busy = i; last = ''; redraw();
+      await hub('admin', { cmd: 'rollcall', band, slot, frac, gain }); await sleep(R.start_delay_ms + 6 * slot * 1000 + R.settle_ms);
+    }
+    if (my !== runId) return;
+    const d = await hub('data'), c = Ranging.soundSpeed(+$('#temp').value || R.temp_default_c), raws = [];
+    if (my !== runId) return;
+    for (let k = 1; k <= R.touch_rounds; k++) {
+      const r = start + k, heard = {}; for (const m of d.members) { const h = m.round === r ? m.heard : (m.prev || []).find(x => x && x.round === r); if (h) heard[m.id] = h.heard || h; }
+      if (heard[tc.ref] && heard[tc.cur]) for (const x of Ranging.pairDistances([tc.ref, tc.cur], heard, { c })) raws.push(x.raw);
+    }
+    tc.busy = 0;
+    if (!raws.length) { toast(t('check.toast.touch_failed', { name: (lastP && lastP.names && lastP.names[tc.cur]) || tc.cur }), true); last = ''; redraw(); return; }
+    const raw = raws.reduce((a, b) => a + b, 0) / raws.length;
+    touches[tc.cur] = { walker: tc.ref, raw, round: start + R.touch_rounds, t: Date.now() }; delete pileOff[tc.cur]; delete pileOff[tc.ref]; store('dp_touch', JSON.stringify(touches)); store('dp_pileoff', JSON.stringify(pileOff));
+    pileRes = t('check.result.touch_last', { cm: (raw * 100).toFixed(0) }) + (raws.length > 1 ? t('check.result.touch_spread', { cm: ((Math.max(...raws) - Math.min(...raws)) * 100).toFixed(0) }) : '');
+    tc.queue.shift(); tc.cur = tc.queue[0]; if (!tc.cur) { touchCal = null; pileRes = t('check.result.touch_done'); }
+  } catch (e) { if (my === runId) { tc.busy = 0; toast(t('check.status.offline'), true); } }
+  last = ''; redraw();
 }
 async function runMeasure() {
-  measure = { rounds: [], need: 5 }; lastResult = ''; guide([], { names: {} }); // placeholder until the next poll redraws
-  const slot = +$('#slot').value;
-  for (let i = 0; i < 5; i++) { await hub('admin', { cmd: 'rollcall', band: $('#band').value, slot, frac: +$('#frac').value, gain: +$('#gain').value }); await new Promise(r => setTimeout(r, 4000 + 6 * slot * 1000 + 2500)); }
-  const t0 = Date.now(); while (measure.rounds.length < 5 && Date.now() - t0 < 15000) await new Promise(r => setTimeout(r, 500));
-  const snap = lastSnap, withTape = snap ? snap.pairs.filter(x => x.tape) : [];
-  const errs = withTape.map(x => Math.abs(x.d - x.tape) * 100), mean = errs.length ? errs.reduce((a, b) => a + b, 0) / errs.length : null, max = errs.length ? Math.max(...errs) : null;
-  lastResult = (measure.rounds.length < 5 ? 'tylko ' + measure.rounds.length + ' pełnych rund · ' : '') + (mean != null ? 'błąd wobec taśmy: średnio ' + mean.toFixed(0) + ' cm, najwięcej ' + max.toFixed(0) + ' cm (' + errs.length + ' par)' + (mean <= 30 ? ' · OK' : ' · za dużo') : 'brak par z taśmą: wpisz taśmę i zmierz jeszcze raz') + (snap && snap.rms != null ? ' · zgodność ±' + (snap.rms * 100).toFixed(0) + ' cm' : '');
-  measure = null;
-  if (snap) { try { await hub('log', { kind: 'map', note: ($('#note').value.trim() || 'pomiar') + ' · ' + lastResult, ...snap }); $('#saved').textContent = 'zapisano ' + new Date().toLocaleTimeString(); } catch (e) { toast('Nie zapisano: ' + e.message, true); } }
-  last = '';
+  if (measure) return;
+  const my = ++runId, mine = measure = { rounds: [], need: R.measure_rounds }; lastResult = ''; redraw();
+  try {
+    const slot = +$('#slot').value;
+    for (let i = 0; i < R.measure_rounds; i++) {
+      if (my !== runId) return;
+      await hub('admin', { cmd: 'rollcall', band: $('#band').value, slot, frac: +$('#frac').value, gain: +$('#gain').value }); await sleep(R.start_delay_ms + 6 * slot * 1000 + R.settle_ms);
+    }
+    const t0 = Date.now(); while (mine.rounds.length < R.measure_rounds && Date.now() - t0 < R.collect_timeout_ms) { if (my !== runId) return; await sleep(500); }
+    if (my !== runId) return;
+    const snap = lastSnap, withTape = snap ? snap.pairs.filter(x => x.tape) : [];
+    const errs = withTape.map(x => Math.abs(x.d - x.tape) * 100), mean = errs.length ? errs.reduce((a, b) => a + b, 0) / errs.length : null, max = errs.length ? Math.max(...errs) : null;
+    lastResult = [mine.rounds.length < R.measure_rounds ? t('check.result.partial', { n: mine.rounds.length }) : '',
+      mean != null ? t('check.result.error', { mean: mean.toFixed(0), max: max.toFixed(0), n: errs.length }) + ' · ' + t(mean <= R.ok_mean_error_cm ? 'check.result.ok' : 'check.result.too_much') : t('check.result.no_tape'),
+      snap && snap.rms != null ? t('check.result.fit', { cm: (snap.rms * 100).toFixed(0) }) : ''].filter(Boolean).join(' · ');
+    measure = null;
+    if (snap) { try { await hub('log', { kind: 'map', note: ($('#note').value.trim() || t('check.result.log_note')) + ' · ' + lastResult, ...snap }); $('#saved').textContent = t('check.actions.saved', { time: new Date().toLocaleTimeString() }); } catch (e) { toast(t('check.toast.not_saved', { err: e.message }), true); } }
+  } catch (e) { if (my === runId) { measure = null; toast(t('check.status.offline'), true); } }
+  last = ''; redraw();
 }
 function maybeNextRound(p, done, now) { // continuous mode: next round once this one is in (or 8 s past its end)
   if (!loop || loopBusy || p.phase !== 'rollcall' || !p.round) return;
@@ -193,27 +256,27 @@ function maybeNextRound(p, done, now) { // continuous mode: next round once this
 const store = (k, v) => { try { if (v === undefined) return localStorage.getItem(k); localStorage.setItem(k, v); } catch (e) {} };
 let lastSnap = null; // what "Zapisz pomiar" sends: the latest fit, for the field log
 let tape = {}; try { tape = JSON.parse(store('dp_tape') || '{}'); } catch (e) {}
-$('#temp').value = store('dp_temp') || 21; $('#band').value = store('dp_band') || 'mid';
+$('#temp').value = store('dp_temp') || R.temp_default_c; $('#band').value = store('dp_band') || R.band_default; $('#matrixHelp').textContent = t('check.matrix.help', { snr: PH.snr_heard });
 $('#temp').onchange = () => { store('dp_temp', $('#temp').value); last = ''; showSpeed(); };
 $('#band').onchange = () => store('dp_band', $('#band').value);
-$('#slot').value = store('dp_slot') || '0.5'; $('#slot').onchange = () => store('dp_slot', $('#slot').value);
-$('#frac').value = store('dp_frac') || '0.3'; $('#frac').onchange = () => store('dp_frac', $('#frac').value);
-$('#gain').value = store('dp_gain') || '0.6'; $('#gain').onchange = () => store('dp_gain', $('#gain').value);
-const showSpeed = () => { $('#cspeed').textContent = 'dźwięk ' + Ranging.soundSpeed(+$('#temp').value || 21).toFixed(1) + ' m/s'; }; showSpeed();
+$('#slot').value = store('dp_slot') || R.slot_default; $('#slot').onchange = () => store('dp_slot', $('#slot').value);
+$('#frac').value = store('dp_frac') || R.frac_default; $('#frac').onchange = () => store('dp_frac', $('#frac').value);
+$('#gain').value = store('dp_gain') || R.gain_default; $('#gain').onchange = () => store('dp_gain', $('#gain').value);
+const showSpeed = () => { $('#cspeed').textContent = t('check.settings.sound_speed', { v: Ranging.soundSpeed(+$('#temp').value || R.temp_default_c).toFixed(1) }); }; showSpeed();
 const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
 const toasted = new Set();
 function toast(text, warn) {
-  const t = document.createElement('div'); t.className = 'toast' + (warn ? ' warn' : ''); t.textContent = text;
-  $('#toasts').appendChild(t); setTimeout(() => t.remove(), 6000);
+  const el = document.createElement('div'); el.className = 'toast' + (warn ? ' warn' : ''); el.textContent = text;
+  $('#toasts').appendChild(el); setTimeout(() => el.remove(), P.toasts.check_ms);
 }
 let last = '';
 async function poll() {
-  let d; try { d = await hub('data'); } catch (e) { $('#status').textContent = 'Brak połączenia z bazą'; return; }
-  const live = d.members.filter(m => m.age < 20), p = d.party;
-  $('#count').textContent = live.length;
+  let d; try { d = await hub('data'); $('#net').textContent = ''; } catch (e) { $('#net').textContent = t('check.status.offline'); return; }
+  const live = d.members.filter(m => m.age < PH.live_age_s), p = d.party;
+  $('#count').textContent = live.length; $('#countCap').textContent = t('check.qr.count', { n: live.length });
   const done = d.members.filter(m => m.round === p.round && m.heard);
-  if (p.phase === 'rollcall' && p.round) $('#status').textContent = (done.length < p.order.length ? 'wyniki: ' + done.length + ' z ' + p.order.length : '') + (loop ? ' · runda ' + p.round : '');
+  if (p.phase === 'rollcall' && p.round) $('#status').textContent = (done.length < p.order.length ? t('check.status.results', { n: done.length, total: p.order.length }) : '') + (loop ? ' · ' + t('check.status.round', { n: p.round }) : '');
   maybeNextRound(p, done, d.t);
   const fresh = done.filter(m => !toasted.has(p.round + ':' + m.id)); // results that just arrived
   if (fresh.length) {
@@ -221,16 +284,16 @@ async function poll() {
     for (const m of fresh) {
       toasted.add(p.round + ':' + m.id);
       const others = p.order.filter(o => o !== m.id), heardN = others.filter(o => Number.isFinite(m.heard[o])).length;
-      if (heardN < others.length) short.push((m.name || m.id) + ': słyszy ' + heardN + ' z ' + others.length);
+      if (heardN < others.length) short.push(t('check.toast.short', { name: m.name || m.id, heard: heardN, total: others.length }));
     }
-    if (fresh.length > 3 || !short.length) toast('Wyniki: ' + fresh.length + ' tel., ' + (fresh.length - short.length) + ' słyszy wszystkich', short.length > 0);
+    if (fresh.length > 3 || !short.length) toast(t('check.toast.results', { n: fresh.length, ok: fresh.length - short.length }), short.length > 0);
     short.slice(0, 3).forEach(t => toast(t, true));
-    if (short.length > 3) toast('...i jeszcze ' + (short.length - 3) + ' z brakami (tabela obok)', true);
+    if (short.length > 3) toast(t('check.toast.more', { n: short.length - 3 }), true);
   }
   if (measure && p.round && done.length >= p.order.length && !measure.rounds.includes(p.round)) measure.rounds.push(p.round);
   detection(d, p);
   guide(live, p);
-  const key = JSON.stringify(done.map(m => [m.id, m.round, m.heard])) + JSON.stringify(tape) + $('#temp').value;
+  const key = JSON.stringify(done.map(m => [m.id, m.round, m.heard])) + JSON.stringify(tape) + $('#temp').value + JSON.stringify(d.members.map(m => m.joined)); // a rejoin must be seen at once: it expires that phone's calibration
   if (key === last) return; last = key;
   const ids = (p.order || []).filter(id => d.members.some(m => m.id === id)), by = Object.fromEntries(d.members.map(m => [m.id, m]));
   const nm = id => esc((by[id] && by[id].name) || id);
@@ -238,15 +301,15 @@ async function poll() {
   for (const r of ids) h += '<tr><th>' + nm(r) + '</th>' + ids.map(c => {
     const m = by[r], s = m && m.snr ? m.snr[c] : null, heard = m && m.heard && Number.isFinite(m.heard[c]);
     if (!m || m.round !== p.round) return '<td class="self">...</td>';
-    if (r === c && m && m.round === p.round && !(s > 8)) return '<td class="dead" title="nie słyszy własnego pisku: głośnik nie gra, stuknij ten telefon">głuchy</td>';
+    if (r === c && m && m.round === p.round && !(s > PH.snr_heard)) return '<td class="dead" title="' + esc(t('check.matrix.deaf_title')) + '">' + esc(t('check.matrix.deaf')) + '</td>';
     return '<td class="' + (r === c ? 'self' : heard ? 'ok' : 'bad') + '">' + (s == null ? '-' : s) + (heard ? '' : ' x') + '</td>';
   }).join('') + '</tr>';
-  $('#matrix').innerHTML = ids.length ? h + '</table>' : '<p class="muted">Jeszcze nie było rundy.</p>';
+  $('#matrix').innerHTML = ids.length ? h + '</table>' : '<p class="muted">' + esc(t('check.matrix.empty')) + '</p>';
   const heard = Object.fromEntries(done.map(m => [m.id, m.heard])), c = Ranging.soundSpeed(+$('#temp').value || 21), dIds = done.map(m => m.id);
   // each member's recent rounds (current + prev ring) -> per-direction medians, so one wrong peak cannot move a pair
   const hist = {}; for (const m of d.members) { const list = [{ round: m.round, heard: m.heard }, ...(Array.isArray(m.prev) ? m.prev : m.prev && m.prev.round ? [m.prev] : [])]; for (const h of list) if (h && h.heard && h.round > 0) (hist[h.round] = hist[h.round] || { round: h.round, heard: {} }).heard[m.id] = h.heard; }
   const roundsForMed = Object.values(hist).filter(h => roundMeta[h.round]).map(h => ({ ...h, order: roundMeta[h.round].order, slot: roundMeta[h.round].slot })).sort((a, b) => b.round - a.round).slice(0, MED_N);
-  const rawD = (useMedian && roundsForMed.length >= 2 ? Ranging.medianDistances(dIds, roundsForMed, { c }) : Ranging.pairDistances(dIds, heard, { c })), notPile = Object.keys(tape).filter(k => tape[k] <= 0.05 && rawD.some(x => x.a + '|' + x.b === k && x.raw > 1));
+  const rawD = (useMedian && roundsForMed.length >= 2 ? Ranging.medianDistances(dIds, roundsForMed, { c }) : Ranging.pairDistances(dIds, heard, { c })), notPile = Object.keys(tape).filter(k => tape[k] <= PH.zero_pair_m && rawD.some(x => x.a + '|' + x.b === k && x.raw > PH.not_pile_raw_m));
   const tapeOk = Object.fromEntries(Object.entries(tape).filter(([k]) => !notPile.includes(k)));
   // touch tour: a device touched by the walker reads raw ~ 0 - offset(walker) - offset(device). With the walker as the zero
   // reference, offset(device) = -raw. Only pair sums matter to the map, so the walker's own gap shifts every device alike.
@@ -268,7 +331,7 @@ async function poll() {
     touchOff[ref] = -refK; for (const i of Object.keys(base)) touchOff[i] = base[i] + refK;
   } else for (const i of Object.keys(base)) touchOff[i] = base[i];
   const fit = Ranging.fitOffsets(rawD, tapeOk); // tape-measured pairs -> per-phone speaker-mic offset
-  for (const m of d.members) { if (m.joined && joinedAt[m.id] && m.joined !== joinedAt[m.id]) { if (pileOff[m.id] !== undefined || touches[m.id]) { delete pileOff[m.id]; delete touches[m.id]; store('dp_pileoff', JSON.stringify(pileOff)); store('dp_touch', JSON.stringify(touches)); toast(nm(m.id) + ' przeładował się: jego kalibracja wygasła', true); } } if (m.joined) joinedAt[m.id] = m.joined; }
+  for (const m of d.members) { if (m.joined && joinedAt[m.id] && m.joined !== joinedAt[m.id]) { if (pileOff[m.id] !== undefined || touches[m.id]) { delete pileOff[m.id]; delete touches[m.id]; store('dp_pileoff', JSON.stringify(pileOff)); store('dp_touch', JSON.stringify(touches)); toast(t('check.toast.reloaded', { name: nm(m.id) }), true); } } if (m.joined) joinedAt[m.id] = m.joined; }
   const offset = Object.fromEntries(dIds.map(i => [i, pileOff[i] ?? touchOff[i] ?? (fit.k[i] ?? fit.shared)])); // pile beats touch beats tape beats shared
   if (pileCal && !p.walker && done.length >= 3 && !pileCal.rounds.some(r => r.round === p.round) && done.length === p.order.length) {
     pileCal.rounds.push({ round: p.round, order: p.order, slot: p.slot, heard: Object.fromEntries(done.map(m => [m.id, m.heard])) });
@@ -276,8 +339,8 @@ async function poll() {
       const ids2 = p.order, ds = Ranging.medianDistances(ids2, pileCal.rounds, { c }), k = Object.fromEntries(ids2.map(i => [i, 0]));
       for (let it = 0; it < 300; it++) for (const i of ids2) { let num = 0, den = 0; for (const x of ds) if (x.a === i || x.b === i) { num += (x.raw - 0.05) - k[x.a === i ? x.b : x.a]; den++; } if (den) k[i] = num / den; }
       let res = 0; for (const x of ds) res += (x.raw - 0.05 - k[x.a] - k[x.b]) ** 2;
-      pileOff = Object.fromEntries(ids2.map(i => [i, -k[i]])); store('dp_pileoff', JSON.stringify(pileOff)); pileCal = null; last = ''; pileRes = 'stos: reszta ' + (Math.sqrt(res / ds.length) * 100).toFixed(0) + ' cm';
-      toast('Stos gotowy: ' + ids2.map(i => nm(i) + ' ' + (-k[i] * 100).toFixed(0) + ' cm').join(', ') + ' · reszta ' + (Math.sqrt(res / ds.length) * 100).toFixed(0) + ' cm', Math.sqrt(res / ds.length) > 0.3);
+      pileOff = Object.fromEntries(ids2.map(i => [i, -k[i]])); store('dp_pileoff', JSON.stringify(pileOff)); pileCal = null; last = ''; pileRes = t('check.result.pile', { cm: (Math.sqrt(res / ds.length) * 100).toFixed(0) });
+      toast(t('check.toast.pile_ready', { list: ids2.map(i => nm(i) + ' ' + (-k[i] * 100).toFixed(0) + ' cm').join(', '), res: (Math.sqrt(res / ds.length) * 100).toFixed(0) }), Math.sqrt(res / ds.length) > 0.3);
     }
   }
   if (p.walker) { // walker rounds: a device the walker touches reads ~0 raw distance. Check this round and each member's previous one.
@@ -286,17 +349,17 @@ async function poll() {
       const mem = view(r), W = mem.find(m => m.id === p.walker); if (!W || !W.lvl) continue;
       const hr = Object.fromEntries(mem.map(m => [m.id, m.heard]));
       for (const x of Ranging.pairDistances(mem.map(m => m.id), hr, { c })) {
-        const other = x.a === p.walker ? x.b : x.b === p.walker ? x.a : null; if (!other || x.raw > 0.15) continue;
+        const other = x.a === p.walker ? x.b : x.b === p.walker ? x.a : null; if (!other || x.raw > P.map.touch_raw_max_m) continue;
         const D = mem.find(m => m.id === other); if (!D || !D.lvl || (touches[other] && touches[other].round >= r)) continue;
         touches[other] = { walker: p.walker, raw: x.raw, lvl: { wd: W.lvl[other], dw: D.lvl[p.walker], ww: W.lvl[p.walker], dd: D.lvl[other] }, round: r, t: Date.now() };
-        store('dp_touch', JSON.stringify(touches)); toast('Dotyk: ' + nm(other) + ' (' + (x.raw * 100).toFixed(0) + ' cm)');
+        store('dp_touch', JSON.stringify(touches)); toast(t('check.toast.touch', { name: nm(other), cm: (x.raw * 100).toFixed(0) }));
       }
     }
   }
   const dists = useMedian && roundsForMed.length >= 2 ? Ranging.medianDistances(dIds, roundsForMed, { c, offset }) : Ranging.pairDistances(dIds, heard, { c, offset });
   if (!p.walker) roundMeta[p.round] = { order: p.order, slot: p.slot }; else delete roundMeta[p.round]; // remember each round's order/slot for the medians
 
-  $('#cal').textContent = (Object.keys(pileOff).length ? 'Ze stosu: ' + Object.entries(pileOff).map(([i, v]) => nm(i) + ' ' + (v * 100).toFixed(0) + ' cm').join(', ') + ' · ' : '') + (Object.keys(touchOff).length ? 'Z dotyków (odniesienie ' + (refK * 100).toFixed(0) + ' cm): ' + Object.entries(touchOff).map(([i, v]) => nm(i) + ' ' + (v * 100).toFixed(0) + ' cm').join(', ') + ' · ' : '') + (fit.n ? 'Poprawka z ' + fit.n + ' pomiarów taśmą: ' + (fit.shared * 100).toFixed(0) + ' cm na telefon' + (Object.keys(fit.k).length > 1 && fit.n >= Object.keys(fit.k).length ? ' (osobno dla każdego)' : ' (wspólna)') : 'bez pomiarów taśmą ani stosu');
+  $('#cal').textContent = (Object.keys(pileOff).length ? t('check.calibration.from_pile', { list: Object.entries(pileOff).map(([i, v]) => nm(i) + ' ' + (v * 100).toFixed(0) + ' cm').join(', ') }) + ' · ' : '') + (Object.keys(touchOff).length ? t('check.calibration.from_touch', { ref: (refK * 100).toFixed(0), list: Object.entries(touchOff).map(([i, v]) => nm(i) + ' ' + (v * 100).toFixed(0) + ' cm').join(', ') }) + ' · ' : '') + (fit.n ? t('check.calibration.from_tape', { n: fit.n, cm: (fit.shared * 100).toFixed(0) }) + (Object.keys(fit.k).length > 1 && fit.n >= Object.keys(fit.k).length ? t('check.calibration.tape_each') : t('check.calibration.tape_shared')) : t('check.calibration.none'));
   const used = dIds.filter(i => dists.some(x => x.a === i || x.b === i));
   let lay = null;
   if (p.walker) { // a walker round never refits the room: the still phones keep the frozen map, the walker is placed alone on it
@@ -309,10 +372,10 @@ async function poll() {
   lastSnap = { round: p.round, slot: p.slot, band: p.band, gain: p.gain, tempC: +$('#temp').value || 21, median: useMedian && roundsForMed.length >= 2, rounds: roundsForMed.length, names: Object.fromEntries(dIds.map(i => [i, nm(i)])),
     pairs: dists.map(x => ({ a: x.a, b: x.b, d: +x.d.toFixed(3), raw: +x.raw.toFixed(3), tape: tape[x.a + '|' + x.b] ?? null, suspect: sus.has(x.a + '|' + x.b) })), offset, pileOff, touchOff, tapeFit: { shared: fit.shared, n: fit.n }, rms: lay ? +lay.rms.toFixed(3) : null,
     pos: lay ? Object.fromEntries(Object.entries(lay.pos).map(([i, q]) => [i, { x: +q.x.toFixed(2), y: +q.y.toFixed(2) }])) : null, matrix: Object.fromEntries(done.map(m => [m.id, m.snr || null])) };
-  $('#pairs').innerHTML = dists.length ? '<table><tr><th>para</th><th>z pisków (m)</th><th>taśma (m)</th><th>błąd</th></tr>' + dists.map(x => {
-    const k = x.a + '|' + x.b, t = tape[k], err = t ? x.d - t : null;
-    return '<tr' + (sus.has(k) ? ' class="sus" title="odstaje od reszty: pewnie zasłonięta ścieżka"' : '') + '><td>' + nm(x.a) + ' - ' + nm(x.b) + (sus.has(k) ? ' ?' : '') + '</td><td>' + x.d.toFixed(2) + '</td><td><input class="tape" data-k="' + k + '" inputmode="decimal" value="' + (t || '') + '"></td><td>' + (err == null ? '' : (err >= 0 ? '+' : '') + err.toFixed(2)) + '</td></tr>';
-  }).join('') + '</table>' + (sus.size ? '<p class="muted" style="font-size:.75em">? = odległość odstaje od reszty sieci (pewnie ktoś zasłonił drogę dźwięku); waży mniej.</p>' : '') : '<p class="muted">Potrzeba co najmniej 2 telefonów, które się usłyszały.</p>';
+  $('#pairs').innerHTML = dists.length ? '<table><tr><th>' + esc(t('check.pairs.th_pair')) + '</th><th>' + esc(t('check.pairs.th_ping')) + '</th><th>' + esc(t('check.pairs.th_tape')) + '</th><th>' + esc(t('check.pairs.th_err')) + '</th></tr>' + dists.map(x => {
+    const k = x.a + '|' + x.b, tp = tape[k], err = tp ? x.d - tp : null;
+    return '<tr' + (sus.has(k) ? ' class="sus" title="' + esc(t('check.pairs.odd_title')) + '"' : '') + '><td>' + nm(x.a) + ' - ' + nm(x.b) + (sus.has(k) ? ' ?' : '') + '</td><td>' + x.d.toFixed(2) + '</td><td><input class="tape" data-k="' + k + '" inputmode="decimal" value="' + (tp || '') + '"></td><td>' + (err == null ? '' : (err >= 0 ? '+' : '') + err.toFixed(2)) + '</td></tr>';
+  }).join('') + '</table>' + (sus.size ? '<p class="muted">' + esc(t('check.pairs.odd_note')) + '</p>' : '') : '<p class="muted">' + esc(t('check.pairs.need', { need: PH.min_for_rollcall })) + '</p>';
   document.querySelectorAll('input.tape').forEach(i => i.onchange = () => { const v = parseFloat(i.value.replace(',', '.')); if (v > 0) tape[i.dataset.k] = v; else delete tape[i.dataset.k]; store('dp_tape', JSON.stringify(tape)); last = ''; });
   // keep the last map while a round is still collecting results, and keep a phone that missed one round where it was;
   // a phone leaves the map only when the hub has not seen it for 20 s
@@ -321,11 +384,11 @@ async function poll() {
   else if (target) { for (const i of Object.keys(target)) if (!liveIds.has(i)) delete target[i]; if (!Object.keys(target).length) target = null; }
   names = nm;
   if (lay && walker && p.walker === walker && lay.pos[walker] && (!trail.length || trail[trail.length - 1].round !== p.round)) trail.push({ round: p.round, x: lay.pos[walker].x, y: lay.pos[walker].y, t: Date.now() });
-  if (trail.length > 40) trail.shift();
-  $('#walkInfo').textContent = walker ? 'Idzie: ' + nm(walker) + (trail.length > 1 ? ' · od startu ' + (Math.hypot(trail[trail.length - 1].x - trail[0].x, trail[trail.length - 1].y - trail[0].y) * 100).toFixed(0) + ' cm, ostatni krok ' + (Math.hypot(trail[trail.length - 1].x - trail[trail.length - 2].x, trail[trail.length - 1].y - trail[trail.length - 2].y) * 100).toFixed(0) + ' cm' : ' · czekam na kolejne rundy') + ' (przytrzymaj znowu, żeby odznaczyć)' : '';
-  const zeros = Object.entries(tape).filter(([, v]) => v <= 0.05).map(([k]) => k.split('|'));
+  if (trail.length > P.map.trail_max) trail.shift();
+  $('#walkInfo').textContent = walker ? t('check.calibration.walk', { name: nm(walker) }) + (trail.length > 1 ? t('check.calibration.walk_trail', { cm: (Math.hypot(trail[trail.length - 1].x - trail[0].x, trail[trail.length - 1].y - trail[0].y) * 100).toFixed(0), step: (Math.hypot(trail[trail.length - 1].x - trail[trail.length - 2].x, trail[trail.length - 1].y - trail[trail.length - 2].y) * 100).toFixed(0) }) : t('check.calibration.walk_wait')) + t('check.calibration.walk_off') : '';
+  const zeros = Object.entries(tape).filter(([, v]) => v <= PH.zero_pair_m).map(([k]) => k.split('|'));
   const pileIds = [...new Set(zeros.flat())];
-  $('#zeroList').innerHTML = (notPile.length ? '<span style="color:var(--warn)">Te telefony nie leżą razem (piski mówią ponad 1 m): ' + notPile.map(k => k.split('|').map(nm).join(' + ')).join(', ') + '. Pomijam.</span><br>' : '') + (pileIds.length ? 'Razem na stosie: ' + pileIds.map(nm).join(' + ') + ' <span class="muted">(stuknij telefon, żeby dodać lub zdjąć; stuknij puste miejsce, żeby skończyć)</span>' : '');
+  $('#zeroList').innerHTML = (notPile.length ? '<span style="color:var(--warn)">' + esc(t('check.calibration.not_pile', { m: PH.not_pile_raw_m, list: notPile.map(k => k.split('|').map(nm).join(' + ')).join(', ') })) + '</span><br>' : '') + (pileIds.length ? esc(t('check.calibration.pile_list', { list: pileIds.map(nm).join(' + ') })) + ' <span class="muted">' + esc(t('check.calibration.pile_hint')) + '</span>' : '');
   // level profile: for a touching pair A,B the beep of A heard by B vs the beep of B heard by A -> speaker and mic
   // differences relative to a reference phone (the first phone of the first zero pair). lvl[x][y] = how loud x heard y.
   const prof = {};
@@ -333,7 +396,7 @@ async function poll() {
   if (refW) { // touch tour: every device against the walker, from the stored touch rounds
     prof[refW] = { spk: 0, mic: 0 };
     for (const [id, t] of Object.entries(touches)) {
-      const L = t.lvl; if (![L.wd, L.dw, L.ww, L.dd].every(Number.isFinite) || id === refW) continue;
+      const L = t.lvl; if (!L || ![L.wd, L.dw, L.ww, L.dd].every(Number.isFinite) || id === refW) continue; // a skipped phone has no levels
       // device heard walker: dw = spk(w) + mic(d) + K ; walker heard device: wd = spk(d) + mic(w) + K ; own beeps: ww, dd
       const dSpkMic = L.wd - L.dw, dOwn = L.dd - L.ww; // (spk(d)-spk(w)) - (mic(d)-mic(w)) ; (spk(d)-spk(w)) + (mic(d)-mic(w))
       prof[id] = { spk: (dSpkMic + dOwn) / 2, mic: (dOwn - dSpkMic) / 2 };
@@ -350,17 +413,17 @@ async function poll() {
       }
     }
   }
-  $('#profile').innerHTML = Object.keys(prof).length > 1 ? '<table><tr><th>telefon</th><th>głośnik</th><th>mikrofon</th></tr>' + Object.entries(prof).map(([id, v]) => '<tr><td>' + nm(id) + '</td><td>' + (v.spk >= 0 ? '+' : '') + v.spk.toFixed(1) + ' dB</td><td>' + (v.mic >= 0 ? '+' : '') + v.mic.toFixed(1) + ' dB</td></tr>').join('') + '</table>' : '<p class="muted" style="font-size:.75em">Pojawi się po pierwszej parze "zero".</p>';
-  $('#latency').innerHTML = '<table><tr><th>telefon</th><th>wyjście</th><th>baza</th><th>Hz</th></tr>' + d.members.filter(m => m.age < 60).map(m => '<tr><td>' + nm(m.id) + '</td>' + (m.lat ? '<td>' + (m.lat.out * 1000).toFixed(1) + ' ms</td><td>' + (m.lat.base * 1000).toFixed(1) + ' ms</td><td>' + m.lat.sr + '</td>' : '<td colspan="3" class="muted">stara strona, przeładuj</td>') + '</tr>').join('') + '</table>';
-  if (walker) { const todo = dIds.filter(i => i !== walker && !touches[i]); $('#tour').innerHTML = 'Dotknięte: ' + (Object.keys(touches).length ? Object.keys(touches).map(nm).join(', ') : 'nic') + (todo.length ? ' · <span style="color:var(--warn)">zostało: ' + todo.map(nm).join(', ') + '</span>' : ' · <span style="color:var(--ok)">wszystkie</span>'); } else $('#tour').textContent = Object.keys(touches).length ? 'Dotknięte: ' + Object.keys(touches).map(nm).join(', ') : '';
-  $('#fit').textContent = lay ? 'zgodność ±' + lay.rms.toFixed(2) + ' m' + (useMedian && roundsForMed.length >= 2 ? ' · mediana z ' + roundsForMed.length + ' rund' : '') + (sus.size ? ' · odstające pary: ' + sus.size : '') : '';
+  $('#profile').innerHTML = Object.keys(prof).length > 1 ? '<table><tr><th>' + esc(t('check.profile.th_phone')) + '</th><th>' + esc(t('check.profile.th_spk')) + '</th><th>' + esc(t('check.profile.th_mic')) + '</th></tr>' + Object.entries(prof).map(([id, v]) => '<tr><td>' + nm(id) + '</td><td>' + (v.spk >= 0 ? '+' : '') + v.spk.toFixed(1) + ' dB</td><td>' + (v.mic >= 0 ? '+' : '') + v.mic.toFixed(1) + ' dB</td></tr>').join('') + '</table>' : '<p class="muted">' + esc(t('check.profile.empty')) + '</p>';
+  $('#latency').innerHTML = '<table><tr><th>' + esc(t('check.latency.th_phone')) + '</th><th>' + esc(t('check.latency.th_out')) + '</th><th>' + esc(t('check.latency.th_in')) + '</th><th>' + esc(t('check.latency.th_hz')) + '</th></tr>' + d.members.filter(m => m.age < PH.latency_age_s).map(m => '<tr><td>' + nm(m.id) + '</td>' + (m.lat ? '<td>' + (m.lat.out * 1000).toFixed(1) + ' ms</td><td>' + (m.lat.base * 1000).toFixed(1) + ' ms</td><td>' + m.lat.sr + '</td>' : '<td colspan="3" class="muted">' + esc(t('check.latency.stale')) + '</td>') + '</tr>').join('') + '</table>';
+  if (walker) { const todo = dIds.filter(i => i !== walker && !touches[i]); $('#tour').innerHTML = esc(t('check.calibration.touched', { list: Object.keys(touches).length ? Object.keys(touches).map(nm).join(', ') : t('check.calibration.touched_none') })) + (todo.length ? ' · <span style="color:var(--warn)">' + esc(t('check.calibration.touched_left', { list: todo.map(nm).join(', ') })) + '</span>' : ' · <span style="color:var(--ok)">' + esc(t('check.calibration.touched_all')) + '</span>'); } else $('#tour').textContent = Object.keys(touches).length ? t('check.calibration.touched', { list: Object.keys(touches).map(nm).join(', ') }) : '';
+  $('#fit').textContent = lay ? t('check.pairs.fit', { m: lay.rms.toFixed(2) }) + (useMedian && roundsForMed.length >= 2 ? t('check.pairs.fit_median', { n: roundsForMed.length }) : '') + (sus.size ? t('check.pairs.fit_odd', { n: sus.size }) : '') : '';
 }
 // the map settles like springs: dots glide from where they were to the new fit; new phones drift in from the middle
 let target = null, shown = {}, names = id => id, dotPos = {}, pile = [], view = null;
-const roundMeta = {}, MED_N = 5; let useMedian = true; // medians over the last 5 full rounds
+const roundMeta = {}, MED_N = R.median_rounds; let useMedian = true; // medians over the last 5 full rounds
 // Position filter per phone (steady-state Kalman with a deadband): small round-to-round changes are noise and get averaged,
 // a change over DEAD metres is a real move and is taken at once. The walker bypasses it, its trail must stay sharp.
-const filt = {}, DEAD = 0.06, GAIN = 0.35;
+const filt = {}, DEAD = P.map.dead_zone_m, GAIN = P.map.filter_gain;
 function filterMap(pos, skip) {
   const out = {};
   for (const [id, p] of Object.entries(pos)) {
@@ -383,18 +446,18 @@ let refK = 0.5; // the reference phone's own delay (m), solved from the spread r
 let touchCal = null; // { ref, queue: [ids], cur, busy } guided touch calibration: each phone laid next to the reference, two rounds, its offset relative to the reference
 let pileOff = {}; try { pileOff = JSON.parse(store('dp_pileoff') || '{}'); } catch (e) {} // id -> offset (m) to add
 let touches = {}; try { touches = JSON.parse(store('dp_touch') || '{}'); } catch (e) {} // id -> { walker, raw, lvl: {wd, dw, ww, dd}, round }
-const hitDot = e => { const dpr = devicePixelRatio || 1, px = e.offsetX * dpr, py = e.offsetY * dpr; const h = Object.entries(dotPos).map(([id, p]) => [id, Math.hypot(p.x - px, p.y - py)]).filter(x => x[1] < 22 * dpr).sort((a, b) => a[1] - b[1])[0]; return h ? h[0] : null; };
-$('#map').addEventListener('pointerdown', e => { pressed = false; const id = hitDot(e); if (!id) return; pressTimer = setTimeout(() => { pressed = true; walker = walker === id ? null : id; trail = []; if (walker && target) frozen = { ...target }; last = ''; }, 600); });
+const hitDot = e => { const dpr = devicePixelRatio || 1, px = e.offsetX * dpr, py = e.offsetY * dpr; const h = Object.entries(dotPos).map(([id, p]) => [id, Math.hypot(p.x - px, p.y - py)]).filter(x => x[1] < P.map.tap_radius_px * dpr).sort((a, b) => a[1] - b[1])[0]; return h ? h[0] : null; };
+$('#map').addEventListener('pointerdown', e => { pressed = false; const id = hitDot(e); if (!id) return; pressTimer = setTimeout(() => { pressed = true; walker = walker === id ? null : id; trail = []; if (walker && target) frozen = { ...target }; last = ''; }, P.map.long_press_ms); });
 $('#map').addEventListener('pointerup', () => clearTimeout(pressTimer)); $('#map').addEventListener('pointerleave', () => clearTimeout(pressTimer));
 $('#map').addEventListener('click', e => {
   if (pressed) { pressed = false; return; } // the long press already acted // tap dots that lie in one pile: 2, 3 or more; every pair in the pile = distance zero
   const dpr = devicePixelRatio || 1, px = e.offsetX * dpr, py = e.offsetY * dpr;
-  const hit = Object.entries(dotPos).map(([id, p]) => [id, Math.hypot(p.x - px, p.y - py)]).filter(x => x[1] < 22 * dpr).sort((a, b) => a[1] - b[1])[0];
+  const hit = Object.entries(dotPos).map(([id, p]) => [id, Math.hypot(p.x - px, p.y - py)]).filter(x => x[1] < P.map.tap_radius_px * dpr).sort((a, b) => a[1] - b[1])[0];
   if (!hit) { pile = []; last = ''; return; } // tap empty space = done picking
   const id = hit[0], i = pile.indexOf(id);
   if (i >= 0) pile.splice(i, 1); else pile.push(id);
-  for (const k of Object.keys(tape)) if (tape[k] <= 0.05) delete tape[k]; // the pile replaces earlier zero pairs
-  for (let x = 0; x < pile.length; x++) for (let y = x + 1; y < pile.length; y++) tape[[pile[x], pile[y]].sort().join('|')] = 0.05;
+  for (const k of Object.keys(tape)) if (tape[k] <= PH.zero_pair_m) delete tape[k]; // the pile replaces earlier zero pairs
+  for (let x = 0; x < pile.length; x++) for (let y = x + 1; y < pile.length; y++) tape[[pile[x], pile[y]].sort().join('|')] = PH.zero_pair_m;
   store('dp_tape', JSON.stringify(tape)); last = '';
 });
 function frame() {
@@ -428,12 +491,12 @@ function drawMap(lay, nm) {
     g.strokeStyle = 'rgba(198,40,40,.5)'; g.lineWidth = 2 * dpr; g.beginPath(); g.arc(x, y, Math.max(6 * dpr, droneFix.err * s), 0, 7); g.stroke();
     g.fillStyle = '#c62828'; g.beginPath(); g.arc(x, y, 9 * dpr, 0, 7); g.fill();
     if (droneFix.speed > 0.2) { const a = droneFix.heading * Math.PI / 180; g.beginPath(); g.moveTo(x, y); g.lineTo(x + Math.sin(a) * 24 * dpr, y - Math.cos(a) * 24 * dpr); g.stroke(); }
-    g.lineWidth = 1; g.fillStyle = '#c62828'; g.fillText('DRON ' + Math.round(droneFix.f0) + ' Hz', x + 12 * dpr, y - 10 * dpr);
+    g.lineWidth = 1; g.fillStyle = '#c62828'; g.fillText(t('detect.canvas', { f0: Math.round(droneFix.f0) }), x + 12 * dpr, y - 10 * dpr);
   }
     for (const [id, p] of pts) {
     const x = cv.width / 2 + (p.x - mx) * s, y = cv.height / 2 - (p.y - my) * s;
     dotPos[id] = { x, y };
-    const inZero = Object.keys(tape).some(k => tape[k] <= 0.05 && k.split('|').includes(id));
+    const inZero = Object.keys(tape).some(k => tape[k] <= PH.zero_pair_m && k.split('|').includes(id));
     if (inZero) { g.strokeStyle = 'rgba(168,100,0,.8)'; g.lineWidth = 2 * dpr; g.beginPath(); g.arc(x, y, 13 * dpr, 0, 7); g.stroke(); g.lineWidth = 1; }
     if (hearing.includes(id)) { g.strokeStyle = '#c62828'; g.lineWidth = 3 * dpr; g.beginPath(); g.arc(x, y, 12 * dpr, 0, 7); g.stroke(); g.lineWidth = 1; }
     g.fillStyle = id === walker ? '#a86400' : '#1f7a3f'; g.beginPath(); g.arc(x, y, 7 * dpr, 0, 7); g.fill();
@@ -441,7 +504,8 @@ function drawMap(lay, nm) {
     g.fillStyle = '#111111'; g.fillText(label, x + 10 * dpr + lw > cv.width ? x - 10 * dpr - lw : x + 10 * dpr, y + 4 * dpr);
   }
 }
-let pollMs = 1000, pollTimer = setInterval(poll, pollMs); poll(); requestAnimationFrame(frame);
-setInterval(() => { const want = walker ? 250 : 1000; if (want !== pollMs) { pollMs = want; clearInterval(pollTimer); pollTimer = setInterval(poll, want); } }, 500); // walker mode: 4x a second, a 3 s round is never missed
+let pollMs = P.map.poll_ms, pollTimer = setInterval(poll, pollMs); poll(); requestAnimationFrame(frame);
+setInterval(() => { const want = walker ? P.map.poll_walker_ms : P.map.poll_ms; if (want !== pollMs) { pollMs = want; clearInterval(pollTimer); pollTimer = setInterval(poll, want); } }, 500); // walker mode: 4x a second, a 3 s round is never missed
+});
 </script>
 </html>
