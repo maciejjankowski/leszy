@@ -34,6 +34,7 @@ function page(file) {
     setTimeout(fn, ms) { const id = ++serial; timeouts.set(id, { fn, ms }); return id; },
     clearTimeout(id) { timeouts.delete(id); },
     fetch(url, options = {}) { return new Promise((resolve, reject) => {
+      if (String(url).includes('pin.php')) return resolve({ ok: true, json: async () => ({ pin: '' }) }); // the QR lookup is not a state request
       requests.push({ url, options, resolve, reject });
       options.signal?.addEventListener('abort', () => reject(new Error('aborted')));
     }); },

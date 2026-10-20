@@ -15,7 +15,7 @@
   .stats b { display: block; font-size: 1.4em; }
   #bar { height: 10px; background: var(--line); border-radius: 5px; overflow: hidden; margin-top: 10px; }
   #bar i { display: block; height: 100%; width: 0; background: var(--ok); transition: width .1s; }
-  canvas { width: 100%; height: 150px; display: block; background: #020905; border-radius: 10px; }
+  canvas { width: 100%; height: 150px; display: block; background: #ffffff; border-radius: 10px; }
 </style>
 <div class="wrap">
   <h1>WIELKI LESZY · CZUJNIK</h1>
@@ -35,7 +35,7 @@
     <div class="stats">
       <div><b id="f0">-</b><span class="muted">wirnik Hz</span></div>
       <div><b id="lvl">-</b><span class="muted">poziom dB</span></div>
-      <div><b id="net">-</b><span class="muted">baza</span></div>
+      <div><b id="net">-</b><span class="muted">połączenie</span></div>
     </div>
     <div class="card" id="st" hidden>
       <div class="row"><span class="muted">f0 udawanego drona</span><input type="range" id="sf" min="120" max="900" value="320"><span id="sfv">320</span></div>
@@ -149,9 +149,9 @@ function show(o, buf) {
   // spectrum 0-4 kHz, floor in dim, comb teeth when detected
   const W = cv.width = cv.clientWidth * devicePixelRatio, H = cv.height = cv.clientHeight * devicePixelRatio, bin = det.binHz, n = Math.floor(4000 / bin);
   const y = v => H - (Math.max(-130, Math.min(-20, v)) + 130) / 110 * H;
-  g.strokeStyle = '#1d4a30'; g.beginPath(); for (let i = 1; i < n; i++) g.lineTo(i / n * W, y(det.floor[i])); g.stroke();
-  g.strokeStyle = '#3dff8a'; g.beginPath(); for (let i = 1; i < n; i++) g.lineTo(i / n * W, y(buf[i])); g.stroke();
-  if (o.detected) { g.strokeStyle = 'rgba(255,77,94,.7)'; for (const f of o.teeth) { const x = f / 4000 * W; g.beginPath(); g.moveTo(x, 0); g.lineTo(x, H); g.stroke(); } }
+  g.strokeStyle = '#d8d5cd'; g.beginPath(); for (let i = 1; i < n; i++) g.lineTo(i / n * W, y(det.floor[i])); g.stroke();
+  g.strokeStyle = '#1f7a3f'; g.beginPath(); for (let i = 1; i < n; i++) g.lineTo(i / n * W, y(buf[i])); g.stroke();
+  if (o.detected) { g.strokeStyle = 'rgba(198,40,40,.7)'; for (const f of o.teeth) { const x = f / 4000 * W; g.beginPath(); g.moveTo(x, 0); g.lineTo(x, H); g.stroke(); } }
 }
 $('#go').onclick = start; $('#stop').onclick = stop;
 if ('serviceWorker' in navigator && isSecureContext) navigator.serviceWorker.register('sw.js').catch(() => {});

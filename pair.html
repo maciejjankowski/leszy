@@ -5,7 +5,7 @@
 <style>
   .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; text-align: center; margin-top: 10px; }
   .stats b { display: block; font-size: 1.5em; }
-  canvas { width: 100%; display: block; background: #020905; border-radius: 10px; }
+  canvas { width: 100%; display: block; background: #ffffff; border-radius: 10px; }
   #dial { height: 260px; }
   #spec { height: 110px; margin-top: 8px; }
   .ch { display: grid; grid-template-columns: 2.2em 1fr 4em 5em; gap: 8px; align-items: center; margin: 4px 0; }
@@ -76,6 +76,9 @@ async function start() {
   if ($('#dev').value) c.deviceId = { exact: $('#dev').value };
   try { stream = await navigator.mediaDevices.getUserMedia({ audio: c }); } catch (e) { $('#err').textContent = 'Mikrofon: ' + e.message; await ctx.close(); return; }
   await listDevices();
+  if (!c.deviceId && !store('dp_pair_dev') && $('#dev').value) { // first run: labels were empty before permission; the DJI receiver is auto-picked now, restart on it
+    stream.getTracks().forEach(t => t.stop()); await ctx.close(); return start();
+  }
   const track = stream.getAudioTracks()[0], st = track.getSettings ? track.getSettings() : {}, nch = st.channelCount || 1;
   $('#who').textContent = (track.label || 'wejście') + ' · ' + nch + ' kan. · ' + ctx.sampleRate + ' Hz';
   if (nch < 2) { $('#err').textContent = 'Wejście jest mono: ustaw odbiornik w tryb Stereo (TX1 lewy, TX2 prawy) i wybierz go z listy.'; }
@@ -131,23 +134,23 @@ const dc = $('#dial'), dg = dc.getContext('2d');
 function dial(medAng, ang, conf) {
   const W = dc.width = dc.clientWidth * devicePixelRatio, H = dc.height = dc.clientHeight * devicePixelRatio, cx = W / 2, cy = H * 0.82, R = Math.min(W / 2, H * 0.75) - 10 * devicePixelRatio;
   dg.clearRect(0, 0, W, H); dg.lineWidth = devicePixelRatio;
-  dg.strokeStyle = '#1d4a30'; dg.beginPath(); dg.arc(cx, cy, R, Math.PI, 2 * Math.PI); dg.stroke();
+  dg.strokeStyle = '#d8d5cd'; dg.beginPath(); dg.arc(cx, cy, R, Math.PI, 2 * Math.PI); dg.stroke();
   for (let a = -90; a <= 90; a += 30) { const t = (a - 90) * Math.PI / 180; dg.beginPath(); dg.moveTo(cx + R * Math.cos(t), cy + R * Math.sin(t)); dg.lineTo(cx + (R - 8 * devicePixelRatio) * Math.cos(t), cy + (R - 8 * devicePixelRatio) * Math.sin(t)); dg.stroke(); }
-  dg.fillStyle = '#5f9a77'; dg.font = `${12 * devicePixelRatio}px ui-monospace, monospace`; dg.textAlign = 'center';
+  dg.fillStyle = '#6a6a66'; dg.font = `${12 * devicePixelRatio}px ui-monospace, monospace`; dg.textAlign = 'center';
   dg.fillText('L', cx - R - 14 * devicePixelRatio, cy + 4 * devicePixelRatio); dg.fillText('P', cx + R + 14 * devicePixelRatio, cy + 4 * devicePixelRatio); dg.fillText('przód (albo tył)', cx, cy - R - 10 * devicePixelRatio);
   // the two mics on the baseline
-  dg.fillStyle = '#b7f5cf'; for (const s of [-1, 1]) { dg.beginPath(); dg.arc(cx + s * 18 * devicePixelRatio, cy, 4 * devicePixelRatio, 0, 7); dg.fill(); }
+  dg.fillStyle = '#1e1e1e'; for (const s of [-1, 1]) { dg.beginPath(); dg.arc(cx + s * 18 * devicePixelRatio, cy, 4 * devicePixelRatio, 0, 7); dg.fill(); }
   const arrow = (a, col, w) => { const t = (a - 90) * Math.PI / 180; dg.strokeStyle = col; dg.lineWidth = w * devicePixelRatio; dg.beginPath(); dg.moveTo(cx, cy); dg.lineTo(cx + R * 0.95 * Math.cos(t), cy + R * 0.95 * Math.sin(t)); dg.stroke(); };
-  if (conf > 2) arrow(ang, 'rgba(61,255,138,.35)', 2);
-  if (isFinite(medAng)) arrow(medAng, conf > 3 ? '#3dff8a' : conf > 2 ? '#ffc24d' : '#2a5a3c', 4);
+  if (conf > 2) arrow(ang, 'rgba(31,122,63,.35)', 2);
+  if (isFinite(medAng)) arrow(medAng, conf > 3 ? '#1f7a3f' : conf > 2 ? '#a86400' : '#bdbab2', 4);
 }
 const sc = $('#spec'), sg = sc.getContext('2d');
 function spectrum(buf, o) {
   const W = sc.width = sc.clientWidth * devicePixelRatio, H = sc.height = sc.clientHeight * devicePixelRatio, bin = dets[0].binHz, n = Math.floor(4000 / bin);
   const y = v => H - (Math.max(-130, Math.min(-20, v)) + 130) / 110 * H;
-  sg.clearRect(0, 0, W, H); sg.strokeStyle = '#1d4a30'; sg.beginPath(); for (let i = 1; i < n; i++) sg.lineTo(i / n * W, y(dets[0].floor[i])); sg.stroke();
-  sg.strokeStyle = '#3dff8a'; sg.beginPath(); for (let i = 1; i < n; i++) sg.lineTo(i / n * W, y(buf[i])); sg.stroke();
-  if (o.detected) { sg.strokeStyle = 'rgba(255,77,94,.7)'; for (const f of o.teeth) { const x = f / 4000 * W; sg.beginPath(); sg.moveTo(x, 0); sg.lineTo(x, H); sg.stroke(); } }
+  sg.clearRect(0, 0, W, H); sg.strokeStyle = '#d8d5cd'; sg.beginPath(); for (let i = 1; i < n; i++) sg.lineTo(i / n * W, y(dets[0].floor[i])); sg.stroke();
+  sg.strokeStyle = '#1f7a3f'; sg.beginPath(); for (let i = 1; i < n; i++) sg.lineTo(i / n * W, y(buf[i])); sg.stroke();
+  if (o.detected) { sg.strokeStyle = 'rgba(198,40,40,.7)'; for (const f of o.teeth) { const x = f / 4000 * W; sg.beginPath(); sg.moveTo(x, 0); sg.lineTo(x, H); sg.stroke(); } }
 }
 $('#go').onclick = start; $('#stop').onclick = stop;
 listDevices();

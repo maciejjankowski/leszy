@@ -9,13 +9,13 @@
 <script>(function () { const r = new URLSearchParams(location.search).get("room"); if (r) document.querySelector("link[rel=manifest]").href = "party-manifest.php?room=" + encodeURIComponent(r); })();</script>
 <style>
   #big { text-align: center; padding: 28px 12px; border-radius: 16px; border: 2px solid var(--line); font-size: 1.5em; letter-spacing: .06em; margin-top: 12px; }
-  #big.beep { background: var(--warn); color: #000; border-color: var(--warn); }
+  #big.beep { background: var(--warn); color: #fff; border-color: var(--warn); }
   #big.drone { background: var(--hot); color: #fff; border-color: var(--hot); font-size: 2em; animation: pulse .4s infinite alternate; }
   #big.ok { border-color: var(--ok); }
   @keyframes pulse { to { filter: brightness(1.4); } }
   #sub { text-align: center; margin-top: 10px; }
   #toasts { position: fixed; left: 12px; right: 12px; bottom: max(12px, env(safe-area-inset-bottom)); display: flex; flex-direction: column; gap: 6px; z-index: 50; }
-  .toast { background: #0d2416; border: 1px solid var(--ok); color: var(--fg); padding: 10px 12px; border-radius: 10px; box-shadow: 0 4px 14px rgba(0,0,0,.4); }
+  .toast { background: #eeece6; border: 1px solid var(--ok); color: var(--fg); padding: 10px 12px; border-radius: 10px; box-shadow: 0 4px 14px rgba(0,0,0,.4); }
   .toast.warn { border-color: var(--warn); }
   .steps { padding-left: 1.2em; }
   #meter { flex: 1; min-width: 120px; height: 14px; background: var(--line); border-radius: 7px; overflow: hidden; }
@@ -26,7 +26,11 @@
 <div class="wrap">
   <h1>WIELKI LESZY · NA ŻYWO</h1>
   <div id="joinBox" class="card">
+    <label style="display:block">Twoje imię <input id="name" size="12" maxlength="24"></label>
+    <button class="big" id="go" style="margin-top:12px">Dołącz</button>
+    <p id="err" style="color:var(--hot)"></p>
     <p class="muted">Twój telefon raz piśnie, a potem będzie słuchał. Nic nie jest nagrywane ani wysyłane poza kilkoma liczbami.</p>
+    <details><summary>Zanim dołączysz: dźwięk i ułożenie</summary>
     <ol class="steps">
       <li id="stInstall" data-ios="Opcjonalnie: stuknij Udostępnij, potem Do ekranu początkowego. Pełny ekran, nie gaśnie." data-android="Opcjonalnie: stuknij menu (trzy kropki), potem Zainstaluj aplikację." data-other="Opcjonalnie: zainstaluj tę stronę jako aplikację z menu przeglądarki."></li>
       <li id="stRinger" data-ios="Dzwonek WŁĄCZONY: boczny przełącznik nie może pokazywać pomarańczowego (tryb cichy wycisza tę stronę)." data-android="Dźwięk WŁĄCZONY: nie wyciszenie, nie wibracje." data-other="Dźwięk włączony."></li>
@@ -36,9 +40,7 @@
     </ol>
     <div class="row"><button class="big" id="tone">Ton</button><div id="meter"><i></i></div></div>
     <div class="row"><button class="big" id="test">Test</button><span id="testRes" class="muted"></span></div>
-    <label style="display:block;margin-top:12px">Twoje imię <input id="name" size="12" maxlength="24"></label>
-    <button class="big" id="go" style="margin-top:12px">Dołącz</button>
-    <p id="err" style="color:var(--hot)"></p>
+    </details>
   </div>
   <div id="runBox" hidden>
     <div id="big">Czekam na odliczanie...</div>

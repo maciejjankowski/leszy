@@ -8,6 +8,7 @@
   #cv { width: 100%; height: 100%; display: block; touch-action: none; }
   aside { background: var(--panel); border-left: 1px solid var(--line); padding: 14px; overflow-y: auto; }
   @media (max-width: 760px) { body { overflow: auto; } .layout { grid-template-columns: 1fr; height: auto; } #cv { height: 100vw; } aside { border-left: 0; border-top: 1px solid var(--line); } }
+  #qr { background: #fff; padding: 8px; border-radius: 10px; display: inline-block; margin-top: 8px; }
   #banner { font-size: 1.25em; letter-spacing: .08em; padding: 10px; border-radius: 10px; text-align: center; border: 1px solid var(--line); }
   #banner.det { background: var(--hot); color: #fff; border-color: var(--hot); }
   #banner.fix { background: var(--hot); color: #fff; border-color: var(--hot); animation: pulse .6s infinite alternate; }
@@ -46,8 +47,10 @@
       <p class="muted">Kalibracja: połóż wszystkie telefony razem, puść udawanego drona metr dalej, naciśnij Kalibruj. To wyrównuje różnice między mikrofonami. Potem rozstaw je z powrotem.</p>
       <div class="row tools"><a href="api.php?a=export">eksport CSV</a><button id="reset">Wyczyść bazę</button></div>
     </details>
-    <p class="muted">Telefony: otwórz <b id="url"></b> &rarr; Czujnik.</p>
+    <p id="msg" class="muted"></p>
+    <div id="joinBox"><div id="qr"></div><p class="muted">Telefon skanuje ten kod albo otwiera <b id="url"></b></p></div>
   </aside>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 </div>
 <script src="fusion.js"></script>
 <script>
@@ -55,7 +58,12 @@ const $ = s => document.querySelector(s);
 const store = (k, v) => { try { if (v === undefined) return localStorage.getItem(k); localStorage.setItem(k, v); } catch (e) {} };
 $('#rw').value = store('de_rw') || 4; $('#rh').value = store('de_rh') || 3; // a 2-3 m ring beats room corners: reverb flattens levels far from a phone
 $('#rw').onchange = $('#rh').onchange = () => { store('de_rw', $('#rw').value); store('de_rh', $('#rh').value); };
-$('#url').textContent = location.href.replace(/radar\.html.*$/, '');
+(async () => { // join QR: sensor.html, with this demo's PIN when the gate allows it
+  let pin = ''; try { pin = (await (await fetch('pin.php?qrinfo=1', { cache: 'no-store' })).json()).pin || ''; } catch (e) {}
+  const u = location.href.replace(/radar\.html.*$/, 'sensor.html') + (pin ? '?pin=' + pin : '');
+  $('#url').textContent = u.replace(/^https?:\/\//, '').replace(/\?pin=.*$/, '') + (pin ? ' (PIN ' + pin + ')' : '');
+  try { new QRCode($('#qr'), { text: u, width: 150, height: 150 }); } catch (e) { $('#qr').textContent = u; }
+})();
 const post = (a, body) => fetch('api.php?a=' + a, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
 
 let nodes = [], loudest = null, sim = null, fix = null, track = null, consensusF0 = 0, nDet = 0, polling = false, mode = 0;
@@ -115,7 +123,7 @@ function fuse(t) {
 
 const compass = h => ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'][Math.round(h / 45) % 8];
 function panel(fresh) {
-  const b = $('#banner');
+  const b = $('#banner'); $('#joinBox').hidden = nodes.length > 0 && fresh.length > 0;
   if (fix && track) { b.className = 'fix'; b.textContent = 'DRON · ŚLEDZĘ'; }
   else if (nDet) { b.className = 'det'; b.textContent = `DRON SŁYSZALNY · telefony: ${nDet}` + (nDet < 3 ? ' · do namiaru potrzeba 3' : ''); }
   else { b.className = ''; b.textContent = fresh.length ? `CZYSTO · słucha telefonów: ${fresh.length}` : nodes.length ? `MILCZY TELEFONÓW: ${nodes.length} · ekran zablokowany?` : 'BRAK TELEFONÓW'; }
@@ -149,46 +157,46 @@ function draw() {
   cv.width = cv.clientWidth * dpr; cv.height = cv.clientHeight * dpr;
   fitView();
   const t = performance.now() / 1000, R = Math.min(cv.width, cv.height) / 2;
-  g.fillStyle = '#020905'; g.fillRect(0, 0, cv.width, cv.height);
+  g.fillStyle = '#ffffff'; g.fillRect(0, 0, cv.width, cv.height);
   // range rings at a round step
   const step = [0.5, 1, 2, 5, 10, 20, 50].find(s => view.ext / s <= 5) || 100;
   g.lineWidth = dpr; g.font = `${11 * dpr}px ui-monospace, Menlo, monospace`;
   for (let r = step; r <= view.ext * 1.5; r += step) {
-    g.strokeStyle = 'rgba(61,255,138,.18)'; g.beginPath(); g.arc(view.cx, view.cy, r * view.s, 0, 7); g.stroke();
-    g.fillStyle = 'rgba(61,255,138,.45)'; g.fillText(r + ' m', view.cx + 4 * dpr, view.cy - r * view.s - 3 * dpr);
+    g.strokeStyle = 'rgba(31,122,63,.18)'; g.beginPath(); g.arc(view.cx, view.cy, r * view.s, 0, 7); g.stroke();
+    g.fillStyle = 'rgba(31,122,63,.45)'; g.fillText(r + ' m', view.cx + 4 * dpr, view.cy - r * view.s - 3 * dpr);
   }
-  g.strokeStyle = 'rgba(61,255,138,.12)'; g.beginPath(); g.moveTo(view.cx, 0); g.lineTo(view.cx, cv.height); g.moveTo(0, view.cy); g.lineTo(cv.width, view.cy); g.stroke();
+  g.strokeStyle = 'rgba(31,122,63,.12)'; g.beginPath(); g.moveTo(view.cx, 0); g.lineTo(view.cx, cv.height); g.moveTo(0, view.cy); g.lineTo(cv.width, view.cy); g.stroke();
   // room outline
   const W = +$('#rw').value, H = +$('#rh').value, [rx, ry] = P(-W / 2, H / 2);
-  g.strokeStyle = 'rgba(183,245,207,.35)'; g.setLineDash([6 * dpr, 6 * dpr]); g.strokeRect(rx, ry, W * view.s, H * view.s); g.setLineDash([]);
-  g.fillStyle = 'rgba(183,245,207,.5)'; g.fillText('PRZÓD', view.cx - 16 * dpr, ry - 6 * dpr);
+  g.strokeStyle = 'rgba(30,30,30,.35)'; g.setLineDash([6 * dpr, 6 * dpr]); g.strokeRect(rx, ry, W * view.s, H * view.s); g.setLineDash([]);
+  g.fillStyle = 'rgba(30,30,30,.5)'; g.fillText('PRZÓD', view.cx - 16 * dpr, ry - 6 * dpr);
   // phones
   for (const n of nodes) {
     if (!n.placed || n.x === null) continue;
     const [x, y] = P(n.x, n.y), stale = n.age > 2.5;
-    if (n.det && !stale) { const pr = (8 + 14 * ((t * 2) % 1)) * dpr; g.strokeStyle = `rgba(255,77,94,${1 - (t * 2) % 1})`; g.lineWidth = 2 * dpr; g.beginPath(); g.arc(x, y, pr, 0, 7); g.stroke(); }
-    g.fillStyle = stale ? '#335' : n.det ? '#ff4d5e' : '#3dff8a';
+    if (n.det && !stale) { const pr = (8 + 14 * ((t * 2) % 1)) * dpr; g.strokeStyle = `rgba(198,40,40,${1 - (t * 2) % 1})`; g.lineWidth = 2 * dpr; g.beginPath(); g.arc(x, y, pr, 0, 7); g.stroke(); }
+    g.fillStyle = stale ? '#9a9890' : n.det ? '#c62828' : '#1f7a3f';
     g.fillRect(x - 6 * dpr, y - 6 * dpr, 12 * dpr, 12 * dpr);
-    g.fillStyle = 'rgba(183,245,207,.85)'; g.fillText(n.name + (n.level > -139 ? ' ' + n.level.toFixed(0) + 'dB' : ''), x + 9 * dpr, y + 4 * dpr);
+    g.fillStyle = 'rgba(30,30,30,.85)'; g.fillText(n.name + (n.level > -139 ? ' ' + n.level.toFixed(0) + 'dB' : ''), x + 9 * dpr, y + 4 * dpr);
   }
   if (loudest) { // zone fallback: the phone hearing it loudest, always shown, needs no model
-    const [x, y] = P(loudest.x, loudest.y); g.strokeStyle = "rgba(255,194,77,.9)"; g.lineWidth = 2 * dpr;
-    g.beginPath(); g.arc(x, y, 22 * dpr, 0, 7); g.stroke(); g.fillStyle = "rgba(255,194,77,.9)"; g.fillText("NAJGŁOŚNIEJ", x - 24 * dpr, y + 36 * dpr);
+    const [x, y] = P(loudest.x, loudest.y); g.strokeStyle = "rgba(168,100,0,.9)"; g.lineWidth = 2 * dpr;
+    g.beginPath(); g.arc(x, y, 22 * dpr, 0, 7); g.stroke(); g.fillStyle = "rgba(168,100,0,.9)"; g.fillText("NAJGŁOŚNIEJ", x - 24 * dpr, y + 36 * dpr);
   }
   // track
   if (track && fix) {
-    g.strokeStyle = 'rgba(255,194,77,.6)'; g.lineWidth = 2 * dpr; g.beginPath();
+    g.strokeStyle = 'rgba(168,100,0,.6)'; g.lineWidth = 2 * dpr; g.beginPath();
     tracker.trail.forEach((p, i) => { const [x, y] = P(p.x, p.y); i ? g.lineTo(x, y) : g.moveTo(x, y); }); g.stroke();
     const [x, y] = P(track.x, track.y);
-    g.strokeStyle = "rgba(255,77,94,.45)"; g.lineWidth = 1.5 * dpr; g.setLineDash([3 * dpr, 5 * dpr]); g.beginPath(); g.arc(x, y, Math.max(fix.err, 0.3) * view.s, 0, 7); g.stroke(); g.setLineDash([]); // uncertainty: thin outline, not a filled disc
+    g.strokeStyle = "rgba(198,40,40,.45)"; g.lineWidth = 1.5 * dpr; g.setLineDash([3 * dpr, 5 * dpr]); g.beginPath(); g.arc(x, y, Math.max(fix.err, 0.3) * view.s, 0, 7); g.stroke(); g.setLineDash([]); // uncertainty: thin outline, not a filled disc
     if (track.speed > 0.2) { // 3 s predicted path
       const [px, py] = P(track.x + track.vx * 3, track.y + track.vy * 3);
-      g.setLineDash([5 * dpr, 5 * dpr]); g.strokeStyle = '#ff4d5e'; g.beginPath(); g.moveTo(x, y); g.lineTo(px, py); g.stroke(); g.setLineDash([]);
+      g.setLineDash([5 * dpr, 5 * dpr]); g.strokeStyle = '#c62828'; g.beginPath(); g.moveTo(x, y); g.lineTo(px, py); g.stroke(); g.setLineDash([]);
     }
-    g.shadowColor = '#ff4d5e'; g.shadowBlur = 18 * dpr; g.fillStyle = '#ff4d5e'; g.beginPath(); g.arc(x, y, 7 * dpr, 0, 7); g.fill(); g.shadowBlur = 0;
+    g.shadowColor = '#c62828'; g.shadowBlur = 18 * dpr; g.fillStyle = '#c62828'; g.beginPath(); g.arc(x, y, 7 * dpr, 0, 7); g.fill(); g.shadowBlur = 0;
     g.fillStyle = '#fff'; g.fillText(`${track.speed.toFixed(1)} m/s`, x + 11 * dpr, y - 9 * dpr);
   }
-  if (sim && sim.truth) { const [x, y] = P(sim.truth.x, sim.truth.y); g.strokeStyle = 'rgba(255,255,255,.5)'; g.beginPath(); g.arc(x, y, 4 * dpr, 0, 7); g.stroke(); }
+  if (sim && sim.truth) { const [x, y] = P(sim.truth.x, sim.truth.y); g.strokeStyle = 'rgba(0,0,0,.35)'; g.beginPath(); g.arc(x, y, 4 * dpr, 0, 7); g.stroke(); }
   requestAnimationFrame(draw);
 }
 requestAnimationFrame(draw);
@@ -224,11 +232,11 @@ $('#auto').onclick = async () => {
 };
 $('#cal').onclick = async () => {
   const fresh = nodes.filter(n => n.age < 2.5 && n.det);
-  if (fresh.length < 2) { $('#banner').textContent = 'KALIBRACJA: potrzeba 2+ telefonów, które słyszą udawanego drona'; return; }
+  if (fresh.length < 2) { $('#msg').textContent = 'Kalibracja: potrzeba 2+ telefonów, które słyszą udawanego drona'; return; }
   const mean = fresh.reduce((s, n) => s + n.level, 0) / fresh.length, gains = {};
   fresh.forEach(n => gains[n.id] = +(mean - n.level).toFixed(2));
   if (!sim) await post('gains', gains);
-  $('#banner').textContent = 'SKALIBROWANO telefonów: ' + fresh.length;
+  $('#msg').textContent = 'Skalibrowano telefonów: ' + fresh.length + ' · ' + new Date().toLocaleTimeString();
 };
 $('#reset').onclick = () => { if (!sim) post('reset', {}); tracker.reset(); track = null; };
 let simTimer = null;

@@ -1,13 +1,13 @@
-:root { --bg: #04100a; --panel: #0a1d13; --line: #1d4a30; --fg: #b7f5cf; --dim: #5f9a77; --hot: #ff4d5e; --warn: #ffc24d; --ok: #3dff8a; color-scheme: dark; }
+:root { --bg: #f4f3ef; --panel: #ffffff; --line: #d8d5cd; --fg: #1e1e1e; --dim: #6a6a66; --hot: #c62828; --warn: #a86400; --ok: #1f7a3f; --accent: #1f5fb3; color-scheme: light; }
 * { box-sizing: border-box; }
-html, body { margin: 0; background: var(--bg); color: var(--fg); font: 15px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace; -webkit-text-size-adjust: 100%; }
-a { color: var(--ok); }
-button, input, select { font: inherit; color: var(--fg); background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: .55em .9em; }
+html, body { margin: 0; background: var(--bg); color: var(--fg); font: 15px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; -webkit-text-size-adjust: 100%; }
+a { color: var(--accent); }
+button, input, select { font: inherit; color: var(--fg); background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: .4em .8em; }
 button { cursor: pointer; }
-button.big { font-size: 1.2em; padding: .9em 1.4em; border-color: var(--ok); }
-button.on { background: var(--ok); color: #021; }
+button.big { font-size: 1em; padding: .5em 1em; border-color: var(--accent); color: var(--accent); font-weight: 600; }
+button.on { background: var(--accent); border-color: var(--accent); color: #fff; }
 .wrap { padding: max(16px, env(safe-area-inset-top)) 16px max(16px, env(safe-area-inset-bottom)); max-width: 640px; margin: 0 auto; }
 .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
 .muted { color: var(--dim); font-size: .85em; }
-.card { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 12px; margin: 12px 0; }
-h1 { font-size: 1.3em; margin: .2em 0 .6em; letter-spacing: .08em; }
+.card { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 12px; margin: 12px 0; }
+h1 { font-size: 1.15em; margin: .2em 0 .6em; letter-spacing: .02em; font-weight: 600; }
