@@ -32,7 +32,7 @@
       <p class="muted" id="gStep" style="margin:0"></p>
       <h2 id="gTitle" style="margin:.15em 0 .3em;font-size:1.2em"></h2>
       <p id="gText" style="margin:.2em 0 .6em"></p>
-      <div class="row"><button class="big" id="gBtn" hidden></button><button id="gSkip" hidden>Pomiń ten telefon</button><button id="gDetect" class="big" hidden style="border-color:var(--hot);color:var(--hot)">Detekcja dronów</button><span id="gStat"></span></div>
+      <div class="row"><button class="big" id="gBtn" hidden></button><button id="gSkip" hidden>Pomiń ten telefon</button><button id="gDetect" class="big" hidden style="border-color:var(--hot);color:var(--hot)">Detekcja dronów</button><button id="gSkipAll" hidden>Pomiń kalibrację</button><span id="gStat"></span></div>
       <p class="row" id="gRefRow" hidden><label>Węzeł odniesienia <select id="gRef"></select></label></p>
       <p id="detStatus" style="margin:.4em 0 0;font-weight:600"></p>
     </div>
@@ -151,7 +151,8 @@ function guide(live, p) {
   else { step = 3; title = 'Rozstaw telefony i zmierz'; text = 'Ustaw telefony w zadanym rozstawie (np. 50 cm między sąsiadami). Taśmą zmierz 2-3 pary i wpisz je w tabeli "Odległości" po prawej. Naciśnij Mierz: 5 rund, wynik i zapis do dziennika. Potem zmień rozstaw i powtórz.'; btn = 'Mierz (5 rund)'; act = runMeasure; stat = lastResult || (pileRes != null ? String(pileRes) : ''); }
   $('#gStep').textContent = 'KROK ' + step + ' z 3'; $('#gTitle').textContent = title; $('#gText').textContent = text; $('#gStat').textContent = stat;
   const b = $('#gBtn'); b.hidden = !btn; if (btn) { b.textContent = btn; b.onclick = act; }
-  const go = $('#gDetect'); go.hidden = !(step === 3 && !measure); go.onclick = () => { detectMode = true; store('dp_mode', 'detect'); last = ''; };
+  const go = $('#gDetect'); go.hidden = !!measure || !!(touchCal && touchCal.busy); // detection is always one press away; calibration is never a gate go.onclick = () => { detectMode = true; store('dp_mode', 'detect'); last = ''; };
+  const sa = $('#gSkipAll'); sa.hidden = step !== 2 || !!(touchCal && touchCal.busy); sa.onclick = () => { for (const i of uncal) touches[i] = { walker: ref, raw: 0.05, round: 0, t: Date.now(), skipped: true }; touchCal = null; store('dp_touch', JSON.stringify(touches)); last = ''; }; // skipped phones keep whatever map position they had
   const sk = $('#gSkip'); sk.hidden = !skip; sk.onclick = () => { if (!touchCal) return; touchCal.queue.shift(); touchCal.cur = touchCal.queue[0]; if (!touchCal.cur) touchCal = null; last = ''; };
 }
 // one phone next to the reference: two rounds, raw two-way distance ref-phone, offset relative to the reference (which counts as zero)
