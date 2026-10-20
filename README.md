@@ -10,14 +10,11 @@ Live (PIN-gated beta; the base screen's QR carries the PIN, so guests type nothi
 |---|---|---|
 | Base: QR + "phones beep" + room map (café test) | [check.html](https://demo.maciejjankowski.com/drone-ear/check.html) | [check.html](check.html) |
 | Guest phone: join, test, beep, listen | [party.html](https://demo.maciejjankowski.com/drone-ear/party.html) | [party.html](party.html) |
-| Stage screen for the audience demo (drones, reveal) | [stage.html](https://demo.maciejjankowski.com/drone-ear/stage.html) | [stage.html](stage.html) |
 | Radar (4-phone demo) / simulated flight | [radar.html](https://demo.maciejjankowski.com/drone-ear/radar.html), [radar.html?sim](https://demo.maciejjankowski.com/drone-ear/radar.html?sim) | [radar.html](radar.html) |
 | Phone sensor (drone detector) | [sensor.html](https://demo.maciejjankowski.com/drone-ear/sensor.html) | [sensor.html](sensor.html) |
 | Two-mic node (DJI Mic 3 pair, bearing) | [pair.html](https://demo.maciejjankowski.com/drone-ear/pair.html) | [pair.html](pair.html) |
 | Fake drone (synthetic rotor sound) | [emitter.html](https://demo.maciejjankowski.com/drone-ear/emitter.html) | [emitter.html](emitter.html) |
-| Deck, Polish (S = speaker notes) | [drone-ear.html](https://demo.maciejjankowski.com/drone-ear/presentations/drone-ear.html) | [presentations/drone-ear.html](presentations/drone-ear.html) |
-| Deck, English | [drone-ear-en.html](https://demo.maciejjankowski.com/drone-ear/presentations/drone-ear-en.html) | [presentations/drone-ear-en.html](presentations/drone-ear-en.html) |
-| Printable cue cards (PL / EN) | [stickies](https://demo.maciejjankowski.com/drone-ear/presentations/drone-ear-stickies.html), [EN](https://demo.maciejjankowski.com/drone-ear/presentations/drone-ear-stickies-en.html) | [presentations/](presentations/) |
+| Deck (PL, EN), cue cards, audience-demo stage screen | not deployed | [extras/](../extras/) |
 
 Reference projects: [VolAnti](https://github.com/agamrossen/VolAnti) (detector design, range tables, BOM) · [Batear](https://github.com/batear-io/batear) (ESP32 + LoRa alerting) · BeepBeep acoustic ranging (Peng et al., ACM SenSys 2007).
 
@@ -101,8 +98,8 @@ Tests: `tests/ranging.test.js` (simulated room with unrelated clocks, playback l
 | `synth.js`, `emitter.html` | synthetic rotor sound for testing |
 | `../tests/run.js` | detector on synthetic audio + fusion on a simulated flight (`SEED=n`) |
 | `../tests/regressions.cjs` | 9 browser-race reproductions |
-| `ranging.js`, `party.html`, `party.php`, `stage.html`, `tap-worklet.js` | audience demo: beep roll call, room map, phone drones |
-| `presentations/` | the deck (reveal.js) and printable cue cards |
+| `check.html`, `party.html`, `party.php`, `ranging.js`, `tap-worklet.js` | node calibration: beep roll call, room map, pile/touch/tape calibration, field log |
+| `../extras/` | audience-demo stage screen, the deck (reveal.js), cue cards, translation helpers; not deployed |
 
 ## What is proven, what is not
 

@@ -1,0 +1,290 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Wielki Leszy | Prezentacja</title>
+
+    <!-- Reveal.js (template v1.0, upgraded to 5.x per presentation-builder START HERE) -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/dist/reset.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/dist/reveal.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/dist/theme/night.css">
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600;9..144,800&family=Inter:wght@400;600&display=swap">
+
+    <style>
+        /*
+        ============================================================
+        9SENS PRESENTATION TEMPLATE v1.0
+        ============================================================
+
+        [x] AUDIENCE DEFINED (all 5 fields):
+            - Who: hackathon jury + participants (engineers, civil-protection and defence-curious)
+            - Level: mixed
+            - Current belief: finding drones needs radar or expensive dedicated hardware
+            - Target belief: a few ordinary phones can hear and track a drone; same pipeline scales to a border
+            - CTA: help me run a field pilot (a field, a drone, a partner who needs the answer)
+
+        [x] PERSONAS CONSULTED (notes: ../../presentations/2026-10-14_drone-ear-script.md, "Persona review"):
+            - STEVE (simplicity) - one sentence: phones that hear drones
+            - LARRY (hook) - joke about phones already listening, then the 19
+            - BILL (truth) - every number re-measured 2026-10-14 on current code, sources on slide
+            - MIDAS (money) - hardware per node vs border line, one money slide
+            - RAMS (design) - one idea per slide, live radar instead of a screenshot
+            - DARO (skeptic) - "what I have not proven" slide before the ask
+
+        [x] STRUCTURE VALIDATED: 17 slides, max 4 bullets, one idea per slide, Prolog presentation_valid
+        [x] DELIVERABLES: drone-ear.html, drone-ear-stickies.html, 2026-10-14_drone-ear-script.md
+        ============================================================
+        */
+
+        /* Palette: field-instrument dusk. Night olive -> dusk -> warm sand (dark to light through the deck).
+           Accent = signal amber; secondary = sage. Signature = harmonic comb along the bottom. */
+        :root { --ink: #eef1e8; --dim: #b9c4b3; --amber: #f2a93b; --sage: #9fd3b0; --panel: rgba(255,255,255,.07); --rule: rgba(238,241,232,.18); }
+
+        .reveal { font-size: 32px; font-family: Inter, system-ui, sans-serif; color: var(--ink); }
+        .reveal h1, .reveal h2, .reveal h3 { text-transform: none; font-family: Fraunces, Georgia, serif; color: var(--ink); letter-spacing: -.01em; }
+        .reveal h1 { font-size: 2.4em; font-weight: 800; }
+        .reveal h2 { font-size: 1.5em; font-weight: 600; }
+        .reveal p { margin: .5em 0; line-height: 1.4; }
+        .reveal ul { margin-left: 1.1em; } .reveal li { margin: .35em 0; }
+        .reveal li::marker { color: var(--amber); }
+
+        .reveal .highlight { color: var(--amber); font-weight: 600; }
+        .reveal .green { color: var(--sage); }
+        .reveal .small-text { font-size: .62em; color: var(--dim); }
+        .reveal .kicker { font-size: .5em; letter-spacing: .22em; text-transform: uppercase; color: var(--sage); }
+
+        .reveal .stat { font-family: Fraunces, Georgia, serif; font-size: 3.2em; font-weight: 800; color: var(--amber); line-height: 1; }
+        .reveal .stat-label { font-size: .8em; color: var(--dim); margin-top: .3em; }
+
+        .reveal .framework-box { background: var(--panel); border: 1px solid var(--rule); padding: 18px 20px; border-radius: 12px; text-align: left; font-size: .8em; }
+        .reveal .framework-box b { display: block; color: var(--amber); font-family: Fraunces, Georgia, serif; font-size: 1.15em; }
+        .reveal .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin: 20px 0; }
+        .reveal .grid-4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin: 20px 0; }
+        .reveal .flow { display: flex; align-items: center; gap: 10px; }
+        .reveal .flow .framework-box { flex: 1; text-align: center; }
+        .reveal .flow .arr { color: var(--amber); font-size: 1.3em; }
+
+        .reveal .live-label { position: absolute; left: 0; top: -40px; font-size: .45em; letter-spacing: .2em; color: var(--amber); text-transform: uppercase; }
+
+        /* signature: harmonic comb along the bottom of every slide */
+        #comb { position: fixed; left: 0; right: 0; bottom: 0; height: 40px; pointer-events: none; z-index: 30; opacity: .5; }
+
+        /* === OVERFLOW INDICATOR (template) === */
+        .reveal .overflow-warning { position: absolute; bottom: 10px; right: 10px; background: #e74c3c; color: white; padding: 5px 10px; font-size: 12px; border-radius: 3px; display: none; }
+        .reveal section.has-overflow .overflow-warning { display: block; }
+    </style>
+</head>
+<body>
+<svg id="comb" preserveAspectRatio="none" viewBox="0 0 1000 40" aria-hidden="true"></svg>
+<div class="reveal"><div class="slides">
+
+    <!-- ACT 1: HOOK -->
+    <section data-background-gradient="linear-gradient(to bottom, #0e1612, #13201a)">
+        <p class="kicker">hackathon · tylko wykrywanie</p>
+        <h1>Wielki Leszy</h1>
+        <p>Telefony, które słyszą drony.</p>
+        <aside class="notes">~20 s. Ciekawość. Leszy: duch lasu z polskich i ukraińskich wierzeń, strażnik puszczy. Wielki: kiedy stanie, będzie strzec całej granicy. Tylko wykrywanie i ostrzeganie.</aside>
+    </section>
+
+    <section data-background-gradient="linear-gradient(to bottom, #0e1612, #13201a)">
+        <h2>Mój telefon i tak słyszy<br>wszystko, co mówię.</h2>
+        <p class="highlight fragment">Więc dałem mu pożyteczną robotę.</p>
+        <aside class="notes">~20 s. Żart. Poczekaj na śmiech, potem puenta.</aside>
+    </section>
+
+    <!-- ACT 4: THE PROBLEM -->
+    <section data-background-gradient="linear-gradient(to bottom, #13201a, #172a20)">
+        <div class="stat">19</div>
+        <p class="stat-label">naruszeń polskiej przestrzeni powietrznej w jedną noc</p>
+        <p class="small-text">9-10 września 2025 · komunikat rządu (gov.pl)</p>
+        <aside class="notes">~25 s. Frustracja. Pauza po 19. Poziom 4 HIGH, gov.pl przez Astra r1 F4.</aside>
+    </section>
+
+    <section data-background-gradient="linear-gradient(to bottom, #13201a, #172a20)">
+        <h2>Drony na światłowodzie nie nadają radiem.</h2>
+        <p class="highlight fragment">Ale śmigła wciąż się kręcą.</p>
+        <aside class="notes">~20 s. Detektory radiowe nic nie widzą. Śmigieł nie da się wyłączyć. Poziom 3, README VolAnti.</aside>
+    </section>
+
+    <!-- ACT 5: THE SOLUTION -->
+    <section data-background-gradient="linear-gradient(to bottom, #172a20, #1c3326)">
+        <h2>Śmigło ma akustyczny odcisk palca</h2>
+        <svg viewBox="0 0 900 220" style="width:100%;height:auto" aria-label="spectrum with evenly spaced peaks">
+            <polyline id="spec" fill="none" stroke="#9fd3b0" stroke-width="3"></polyline>
+            <g font-family="Inter" font-size="18" fill="#f2a93b" id="speclbl"></g>
+        </svg>
+        <p>Równo rozstawione tony. Wiatr ani głosy takich nie dają.</p>
+        <aside class="notes">~35 s. Ulga. Łopaty x obroty na sekundę = ton podstawowy, potem 2x, 3x, 4x. Pokaż zęby grzebienia.</aside>
+    </section>
+
+    <section data-background-gradient="linear-gradient(to bottom, #172a20, #1c3326)">
+        <p class="kicker">mechanizm 1 · detektor</p>
+        <h2>Nie bije na alarm bez powodu.</h2>
+        <p>Szum skacze. Śmigło trzyma jedną nutę.</p>
+        <p>Alarm dopiero, gdy nuta trwa jedną trzecią sekundy.</p>
+        <div class="stat">0</div>
+        <p class="stat-label">fałszywych alarmów na samym szumie, w każdym teście</p>
+        <aside class="notes">~35 s. Dlaczego to ważne: tani detektor, który bije na alarm bez powodu, ktoś szybko wyłączy. Przez 2 s uczy się sali, ocenia grzebień, wymaga 6 odczytów z rzędu (po 60 ms na telefonie). Szum wygrywa jeden odczyt, nigdy sześć. Alarm 0,21 s od startu wirnika. Testy syntetyczne, 2026-10-14. Konstrukcja wg VolAnti, poziom 1.</aside>
+    </section>
+
+    <section data-background-gradient="linear-gradient(to bottom, #1c3326, #22392b)">
+        <p class="kicker">mechanizm 2 · fuzja</p>
+        <h2>Gdzie jest? Zapytaj każdy telefon.</h2>
+        <ul>
+            <li>Dwa razy dalej to cztery razy ciszej.</li>
+            <li>Szukam punktu, który pasuje do wszystkich telefonów.</li>
+        </ul>
+        <p class="small-text">3+ telefony · do pół metra w symulacji</p>
+        <aside class="notes">~35 s. Dlaczego głośność: metody oparte na czasie dotarcia dźwięku wymagają zegarów zgranych co do mikrosekundy, a telefony takich nie mają. Głośność nie potrzebuje zegarów. -6 dB na każde podwojenie odległości.</aside>
+    </section>
+
+    <section data-background-iframe="https://demo.maciejjankowski.com/drone-ear/radar.html?sim" data-background-interactive data-background-color="#04100a">
+        <aside class="notes">~30 s. Mechanizm 3, śledzenie. Prawdziwy radar na symulowanym locie: filtr Kalmana daje prędkość, kurs i tor na 3 s. Bursztynowy pierścień = telefon, który słyszy najgłośniej; rezerwa, która nie potrzebuje modelu.</aside>
+    </section>
+
+    <!-- ACT 3: PROOF (live) -->
+    <section data-background-iframe="https://demo.maciejjankowski.com/drone-ear/radar.html" data-background-interactive data-background-color="#04100a">
+        <aside class="notes">~90 s. NA ŻYWO. Telefony otwierają /drone-ear/ -> Czujnik. Rozmieść, Kalibruj z telefonami razem, potem zawiśnij przy każdym telefonie i zrób jeden powolny przelot. Jeśli punkt się błąka: mów o bursztynowym pierścieniu, „wykrywanie strefowe”. Próg: pierścień trafia 4 z 4.</aside>
+    </section>
+
+    <section data-background-gradient="linear-gradient(to bottom, #1c3326, #22392b)">
+        <h2>Przygotuj telefon</h2>
+        <ul>
+            <li>Zeskanuj kod. Bez wpisywania PIN-u.</li>
+            <li>Dzwonek włączony, głośność na maksimum.</li>
+            <li>Płasko na stole, górną krawędzią do sceny.</li>
+            <li>Stuknij Test, zezwól na mikrofon.</li>
+        </ul>
+        <p class="small-text">Opcjonalnie: Udostępnij, potem Do ekranu początkowego (iPhone) · menu, potem Zainstaluj (Android)</p>
+        <aside class="notes">~45 s. Pokaż na własnym telefonie, powoli. Gwizd testowy sprawdza naraz głośnik, głośność i mikrofon. Ten sam kierunek u wszystkich = każdy telefon słyszy tak samo; kompas na ekranie podpowiada, jak obrócić.</aside>
+    </section>
+
+    <section data-background-iframe="../stage.html" data-background-interactive data-background-color="#04100a">
+        <aside class="notes">~3 min. DEMO Z PUBLICZNOŚCIĄ. Wszyscy skanują QR po prawej i stukają Dołącz (dzwonek włączony, głośność w górę). Urządzenia prowadzącego: party.html?role=L i ?role=R w przednich narożnikach. Naciśnij Odliczanie: każdy telefon raz piszczy, pojawia się mapa sali. Naciśnij Jeden dron: losowy telefon staje się dronem. Poproś salę, żeby go wskazała, potem Odsłoń.</aside>
+    </section>
+
+    <section data-background-gradient="linear-gradient(to bottom, #22392b, #2a3f2c)">
+        <h2>Czego jeszcze nie udowodniłem</h2>
+        <ul>
+            <li>Echo w sali spłaszcza różnice głośności.</li>
+            <li>Telefony mogą filtrować dźwięk z mikrofonu.</li>
+            <li>Wiatr, zasięg, otwarty teren: nietestowane.</li>
+        </ul>
+        <aside class="notes">~25 s. DARO. Powiedz to, zanim powie to jury.</aside>
+    </section>
+
+    <!-- ACT 6/8: WHAT IS DIFFERENT -->
+    <section data-background-gradient="linear-gradient(to bottom, #2a3f2c, #33452c)">
+        <h2>Cztery tanie eksperymenty</h2>
+        <ul>
+            <li>Prędkość z jednego mikrofonu: ton opada przy przelocie.</li>
+            <li>Dwa rzędy czujników: kolejność daje kierunek.</li>
+            <li>Tuba na mikrofonie: namiernik kierunku.</li>
+            <li>Ciche drony i tak gadają przez radio.</li>
+        </ul>
+        <aside class="notes">~40 s. Wszystko nietestowane. Przy 50 m/s ton spada o 34%: (343+50)/(343-50) = 1,34.</aside>
+    </section>
+
+    <section data-background-gradient="linear-gradient(to bottom, #33452c, #3e4b2c)">
+        <h2>Ten sam układ, większa skala</h2>
+        <div class="flow">
+            <div class="framework-box"><b>Węzeł</b>4 mikrofony, panel</div><span class="arr">&rarr;</span>
+            <div class="framework-box"><b>Przekaźnik</b>maszt LoRa</div><span class="arr">&rarr;</span>
+            <div class="framework-box"><b>Fuzja</b>trasy</div><span class="arr">&rarr;</span>
+            <div class="framework-box"><b>Operator</b>alarm</div>
+        </div>
+        <p class="small-text">Ukraina ma taki układ w skali 10 000+ czujników (Sky Fortress)</p>
+        <aside class="notes">~30 s. Poziom 3 dla liczby, 4 dla architektury, przez Astra r1 F10.</aside>
+    </section>
+
+    <!-- ACT 7: BUSINESS MODEL -->
+    <section data-background-gradient="linear-gradient(to bottom, #3e4b2c, #4d532d)">
+        <div class="stat">5,3 mln zł</div>
+        <p class="stat-label">najpewniej: 418 km granicy z Białorusią, ~420 węzłów</p>
+        <p class="small-text">przedział 1,8-17,9 mln · szacunek inżynierski, nie oferty</p>
+        <aside class="notes">~30 s. MIDAS. Elektronika ~250-400 zł na węzeł; dominują panel, akumulator i robocizna. Poziom 1, szacunek.</aside>
+    </section>
+
+    <section data-background-gradient="linear-gradient(to bottom, #4d532d, #5d5a30)">
+        <h2>Prawdziwy cel: drony o zasięgu 50+ km</h2>
+        <div class="grid-2">
+            <div class="framework-box"><b>Głośne: tłokowe, odrzutowe</b>linia węzłów</div>
+            <div class="framework-box"><b>Ciche: elektryczne</b>pierścienie przy bazach + radio</div>
+        </div>
+        <aside class="notes">~30 s. Shahed, Gerbera, Orlan, Geran-3 kontra Lancet, ZALA, Supercam. Jeden typ czujnika nie pokryje całej klasy.</aside>
+    </section>
+
+    <!-- ACT 9: CLOSE -->
+    <section data-background-gradient="linear-gradient(to bottom, #5d5a30, #75683a)">
+        <h2>Każdy krok warunkuje następny</h2>
+        <div class="grid-4">
+            <div class="framework-box"><b>Dziś</b>jedna sala</div>
+            <div class="framework-box"><b>Dzień w terenie</b>zasięg a wiatr</div>
+            <div class="framework-box"><b>Pilotaż</b>12 węzłów, 30 dni</div>
+            <div class="framework-box"><b>Odcinek</b>rozstaw z danych</div>
+        </div>
+        <aside class="notes">~20 s. Żaden krok, zanim poprzedni nie da liczb.</aside>
+    </section>
+
+    <section data-background-gradient="linear-gradient(to bottom, #5d5a30, #6c6034)">
+        <h1 style="font-size:1.9em">Pomóż mi zrobić<br>pilotaż w terenie.</h1>
+        <p>Pole, dron i partner, który potrzebuje odpowiedzi.</p>
+        <aside class="notes">~15 s. Utrzymaj kontakt wzrokowy. Jeśli się mylę, że ktoś tego potrzebuje, dziś nikt nie zaoferuje pola ani partnera: to jest sygnał. Poziom 1.</aside>
+    </section>
+
+    <section data-background-gradient="linear-gradient(to bottom, #6c6034, #7d6c3b)">
+        <h2>Pytania?</h2>
+        <p class="small-text">Na bazie VolAnti (Agam Rossen) i Batear. Tylko wykrywanie i ostrzeganie.</p>
+        <aside class="notes">Pytania. Gotowe odpowiedzi w skrypcie.</aside>
+    </section>
+
+</div></div>
+
+<script src="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/dist/reveal.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/plugin/notes/notes.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/plugin/markdown/markdown.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/plugin/highlight/highlight.js"></script>
+<script>
+// signature comb
+(function () {
+    const svg = document.getElementById('comb'); let s = '';
+    for (let k = 1; k <= 40; k++) { const x = k * 24.4, h = 36 / Math.pow(k, 0.45); s += '<line x1="' + x + '" x2="' + x + '" y1="40" y2="' + (40 - h) + '" stroke="#f2a93b" stroke-width="2"/>'; }
+    svg.innerHTML = s;
+})();
+// spectrum picture
+(function () {
+    let pts = [], seed = 7; const rnd = () => ((seed = (seed * 9301 + 49297) % 233280) / 233280);
+    for (let x = 0; x <= 900; x += 3) {
+        let y = 195 - rnd() * 14;
+        for (let k = 1; k <= 9; k++) { const c = k * 90, d = Math.abs(x - c); if (d < 9) y = Math.min(y, 195 - (165 / Math.pow(k, 0.55)) * (1 - d / 9)); }
+        pts.push(x + ',' + y.toFixed(1));
+    }
+    document.getElementById('spec').setAttribute('points', pts.join(' '));
+    document.getElementById('speclbl').innerHTML = ['f', '2f', '3f', '4f'].map((t, i) => '<text x="' + ((i + 1) * 90 - 8) + '" y="218">' + t + '</text>').join('');
+})();
+// overflow markers (template)
+document.querySelectorAll('.reveal .slides > section').forEach(s => { const w = document.createElement('div'); w.className = 'overflow-warning'; w.textContent = 'OVERFLOW'; s.appendChild(w); });
+
+Reveal.initialize({
+    hash: true, slideNumber: 'c/t', center: true, transition: 'fade', transitionSpeed: 'slow',
+    hideInactiveCursor: true, pdfSeparateFragments: true, defaultTiming: 30,
+    width: 1180, height: 720, margin: 0.08, minScale: 0.2, maxScale: 2.0,
+    plugins: [RevealHighlight, RevealNotes, RevealMarkdown]
+});
+
+// === OVERFLOW DETECTION (template) ===
+function checkOverflow() {
+    document.querySelectorAll('.reveal .slides > section').forEach(slide => {
+        slide.classList.remove('has-overflow');
+        if (slide.scrollHeight > 720 * 0.9) { slide.classList.add('has-overflow'); console.warn('Overflow detected on slide:', slide.querySelector('h1, h2')?.textContent); }
+        const sr = slide.getBoundingClientRect();
+        slide.querySelectorAll('p, li, .framework-box').forEach(el => { const r = el.getBoundingClientRect(); if (sr.width && (r.bottom > sr.bottom + 1 || r.right > sr.right + 1)) slide.classList.add('has-overflow'); });
+    });
+}
+Reveal.on('ready', checkOverflow);
+Reveal.on('slidechanged', checkOverflow);
+window.addEventListener('resize', checkOverflow);
+</script>
+</body>
+</html>

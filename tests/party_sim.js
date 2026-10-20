@@ -1,5 +1,5 @@
 // node tests/party_sim.js [hubUrl]  - drives party.php like 14 phones would (audio simulated):
-// join, roll call (heard times from a simulated room), one drone, levels. Then open stage.html to look.
+// join, roll call (heard times from a simulated room), one drone, levels. Then open check.html to look.
 const R = require('../ranging.js'), F = require('../fusion.js');
 const HUB = process.argv[2] || 'http://localhost:18080/drone-ear/party.php';
 const q = a => HUB + (HUB.includes('?') ? '&' : '?') + 'a=' + a;

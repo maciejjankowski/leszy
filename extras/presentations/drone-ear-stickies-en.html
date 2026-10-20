@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Speaker Notes - Wielki Leszy</title>
+<style>
+  @page { size: A5 landscape; margin: 5mm; }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Segoe UI', system-ui, sans-serif; font-size: 11pt; background: #f5f5f5; }
+  .page { width: 210mm; height: 148mm; padding: 5mm; display: grid; grid-template-columns: repeat(3, 1fr); grid-template-rows: repeat(2, 1fr); gap: 4mm; page-break-after: always; background: white; margin: 0 auto 6mm; }
+  .sticky { background: #ffffa5; border: 1px solid #e6e600; border-radius: 2px; padding: 8px 10px; display: flex; flex-direction: column; box-shadow: 2px 2px 4px rgba(0,0,0,.1); overflow: hidden; }
+  .sticky-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; padding-bottom: 4px; border-bottom: 1px dashed #ccc; }
+  .sticky-icons { font-size: 16pt; letter-spacing: 2px; }
+  .sticky-number { font-size: 9pt; color: #666; font-weight: bold; }
+  .sticky-keywords { flex: 1; font-size: 13pt; font-weight: bold; line-height: 1.4; color: #333; }
+  .sticky-keywords span::after { content: " \2022 "; color: #999; }
+  .sticky-keywords span:last-child::after { content: ""; }
+  .sticky-action { margin-top: auto; padding-top: 6px; font-size: 10pt; color: #c00; font-style: italic; }
+  .sticky-action::before { content: "\2192  "; }
+  .sticky.hook { background: #ffcccc; border-color: #ff9999; } .sticky.story { background: #cce5ff; border-color: #99caff; }
+  .sticky.proof { background: #ccffcc; border-color: #99ff99; } .sticky.cta { background: #ffcc99; border-color: #ff9966; }
+  @media print { body { background: white; } .sticky { -webkit-print-color-adjust: exact; print-color-adjust: exact; } }
+</style>
+</head>
+<body>
+<div class="page">
+  <div class="sticky hook"><div class="sticky-header"><span class="sticky-icons">🎤 ⚡</span><span class="sticky-number">#1</span></div><div class="sticky-keywords"><span>Wielki Leszy</span><span>Phones hear drones</span></div><div class="sticky-action">Energy, scan the room</div></div>
+  <div class="sticky hook"><div class="sticky-header"><span class="sticky-icons">😄 ⏸️</span><span class="sticky-number">#2</span></div><div class="sticky-keywords"><span>Phone listens</span><span>Useful job</span></div><div class="sticky-action">Pause for the laugh</div></div>
+  <div class="sticky hook"><div class="sticky-header"><span class="sticky-icons">📊 ⏸️</span><span class="sticky-number">#3</span></div><div class="sticky-keywords"><span>19</span><span>One night</span><span>Sep 2025</span></div><div class="sticky-action">Pause after 19</div></div>
+  <div class="sticky story"><div class="sticky-header"><span class="sticky-icons">🔇</span><span class="sticky-number">#4</span></div><div class="sticky-keywords"><span>Fibre-optic</span><span>No radio</span><span>Propellers</span></div><div class="sticky-action">Lower voice on the reveal</div></div>
+  <div class="sticky proof"><div class="sticky-header"><span class="sticky-icons">👆</span><span class="sticky-number">#5</span></div><div class="sticky-keywords"><span>Base tone</span><span>2x 3x 4x</span><span>Spacing</span></div><div class="sticky-action">Point at the teeth</div></div>
+  <div class="sticky proof"><div class="sticky-header"><span class="sticky-icons">📊 🎯</span><span class="sticky-number">#6</span></div><div class="sticky-keywords"><span>Six frames</span><span>Zero false alarms</span></div><div class="sticky-action">Noise wins once, never six</div></div>
+</div>
+<div class="page">
+  <div class="sticky proof"><div class="sticky-header"><span class="sticky-icons">🎯</span><span class="sticky-number">#7</span></div><div class="sticky-keywords"><span>No clocks</span><span>-6 dB</span><span>Agree</span></div><div class="sticky-action">Stress: phones cannot sync</div></div>
+  <div class="sticky "><div class="sticky-header"><span class="sticky-icons">💻 👆</span><span class="sticky-number">#8</span></div><div class="sticky-keywords"><span>Live sim</span><span>Amber ring</span></div><div class="sticky-action">Point at the ring</div></div>
+  <div class="sticky "><div class="sticky-header"><span class="sticky-icons">💻 💧</span><span class="sticky-number">#9</span></div><div class="sticky-keywords"><span>Live</span><span>Calibrate</span><span>Hover each</span></div><div class="sticky-action">Blip wanders? Narrate the ring</div></div>
+  <div class="sticky "><div class="sticky-header"><span class="sticky-icons">👆 🎯</span><span class="sticky-number">#10</span></div><div class="sticky-keywords"><span>Scan</span><span>Ringer, volume</span><span>Flat, to stage</span><span>Test</span></div><div class="sticky-action">Show it on your own phone</div></div>
+  <div class="sticky "><div class="sticky-header"><span class="sticky-icons">💻 ❓</span><span class="sticky-number">#11</span></div><div class="sticky-keywords"><span>Your turn</span><span>Scan</span><span>Roll call</span><span>Drone</span></div><div class="sticky-action">Ask them to point first</div></div>
+  <div class="sticky story"><div class="sticky-header"><span class="sticky-icons">🔇</span><span class="sticky-number">#12</span></div><div class="sticky-keywords"><span>Echo</span><span>Mic filters</span><span>Untested</span></div><div class="sticky-action">Say it before the jury</div></div>
+</div>
+<div class="page">
+  <div class="sticky "><div class="sticky-header"><span class="sticky-icons">⚡</span><span class="sticky-number">#13</span></div><div class="sticky-keywords"><span>Pitch drop</span><span>Two rows</span><span>Horn</span><span>Radio</span></div><div class="sticky-action">Skip if running long</div></div>
+  <div class="sticky proof"><div class="sticky-header"><span class="sticky-icons">📊</span><span class="sticky-number">#14</span></div><div class="sticky-keywords"><span>Same pipeline</span><span>10,000+ Ukraine</span></div><div class="sticky-action">Point along the arrows</div></div>
+  <div class="sticky proof"><div class="sticky-header"><span class="sticky-icons">📊 🎯</span><span class="sticky-number">#15</span></div><div class="sticky-keywords"><span>PLN 5.3M</span><span>420 nodes</span><span>Allowance</span></div><div class="sticky-action">Say "not quotes"</div></div>
+  <div class="sticky "><div class="sticky-header"><span class="sticky-icons">🎯</span><span class="sticky-number">#16</span></div><div class="sticky-keywords"><span>50+ km</span><span>Loud line</span><span>Quiet rings</span></div><div class="sticky-action">Skip if running long</div></div>
+  <div class="sticky "><div class="sticky-header"><span class="sticky-icons">⚡</span><span class="sticky-number">#17</span></div><div class="sticky-keywords"><span>Room</span><span>Field</span><span>Pilot</span><span>Sector</span></div><div class="sticky-action">Keep it brisk</div></div>
+  <div class="sticky cta"><div class="sticky-header"><span class="sticky-icons">🎯 ⚡</span><span class="sticky-number">#18</span></div><div class="sticky-keywords"><span>The ask</span><span>Field pilot</span></div><div class="sticky-action">Hold eye contact</div></div>
+</div>
+<div class="page">
+  <div class="sticky cta"><div class="sticky-header"><span class="sticky-icons">❓</span><span class="sticky-number">#19</span></div><div class="sticky-keywords"><span>Questions</span><span>Credits</span></div><div class="sticky-action">Open the floor</div></div>
+</div>
+</body></html>

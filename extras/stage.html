@@ -1,0 +1,138 @@
+<!doctype html>
+<html lang="pl"><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Wielki Leszy - scena</title>
+<link rel="stylesheet" href="../style.css">
+<style>
+  body { overflow: hidden; }
+  .layout { display: grid; grid-template-columns: 1fr 340px; height: 100vh; height: 100dvh; }
+  #cv { width: 100%; height: 100%; display: block; }
+  aside { background: var(--panel); border-left: 1px solid var(--line); padding: 14px; overflow-y: auto; }
+  @media (max-width: 760px) { body { overflow: auto; } .layout { grid-template-columns: 1fr; height: auto; } #cv { height: 100vw; } }
+  #phase { font-size: 1.3em; letter-spacing: .08em; padding: 10px; text-align: center; border: 1px solid var(--line); border-radius: 10px; }
+  .tools { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 12px 0; }
+  .tools button { padding: .5em; }
+  #qr { background: #fff; padding: 8px; border-radius: 8px; width: max-content; margin: 8px 0; }
+  dl { display: grid; grid-template-columns: auto 1fr; gap: 4px 12px; } dt { color: var(--dim); } dd { margin: 0; text-align: right; }
+</style>
+<div class="layout">
+  <canvas id="cv"></canvas>
+  <aside>
+    <h1>WIELKI LESZY · SCENA</h1>
+    <div id="phase">POCZEKALNIA</div>
+    <dl>
+      <dt>telefonów</dt><dd id="nIn">0</dd>
+      <dt>na mapie</dt><dd id="nMap">-</dd>
+      <dt>zgodność mapy</dt><dd id="fit">-</dd>
+    </dl>
+    <div class="tools">
+      <button id="roll">1. Odliczanie</button>
+      <button id="d1">2. Jeden dron</button>
+      <button id="d3">Trzy drony</button>
+      <button id="reveal">Odsłoń</button>
+      <button id="land">Ląduj</button>
+      <button id="reset">Od nowa</button>
+    </div>
+    <p class="muted">Dołącz telefonem:</p>
+    <div id="qr"></div>
+    <p class="muted" id="url"></p>
+    <p class="muted">Prowadzący: otwórz <b>party.html?role=L</b> i <b>?role=R</b> na dwóch urządzeniach w lewym i prawym przednim rogu. Dzięki nim mapa nie jest obrócona.</p>
+  </aside>
+</div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<script src="../ranging.js"></script>
+<script src="../fusion.js"></script>
+<script>
+const $ = s => document.querySelector(s);
+const joinUrl = location.href.replace(/stage\.html.*$/, 'party.html');
+$('#url').textContent = joinUrl;
+// the QR carries this demo's own join PIN (asked from the gate; only an unlocked browser gets it), so nobody types it
+(async () => {
+  let pin = '';
+  try { pin = (await (await fetch('pin.php?qrinfo=1', { cache: 'no-store' })).json()).pin || ''; } catch (e) {}
+  try { new QRCode($('#qr'), { text: joinUrl + (pin ? '?pin=' + pin : ''), width: 200, height: 200 }); } catch (e) {}
+  if (pin) $('#url').textContent = joinUrl + ' · PIN ' + pin;
+})();
+const admin = (cmd, extra) => fetch('../party.php?a=admin', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ cmd, ...extra }) }).then(r => r.json());
+$('#roll').onclick = () => admin('rollcall');
+$('#d1').onclick = () => { revealed = false; admin('drones', { k: 1 }); };
+$('#d3').onclick = () => { revealed = false; admin('drones', { k: 3 }); };
+$('#land').onclick = () => admin('land');
+$('#reset').onclick = () => admin('reset');
+$('#reveal').onclick = () => { revealed = !revealed; };
+
+let data = { members: [], party: { phase: 'lobby' } }, map = {}, mapRound = -1, fit = null, fixes = [], revealed = false;
+const COL = ['#ff4d5e', '#ffc24d', '#4dc3ff', '#c77dff', '#3dff8a'];
+
+async function poll() {
+  try { data = await (await fetch('../party.php?a=data', { cache: 'no-store' })).json(); } catch (e) { return; }
+  const p = data.party, live = data.members.filter(m => m.age < 15);
+  $('#nIn').textContent = live.length;
+  $('#phase').textContent = { lobby: 'POCZEKALNIA · zeskanuj kod', rollcall: 'ODLICZANIE', mapped: 'NA MAPIE', drones: 'DRONY W POWIETRZU' }[p.phase] || p.phase;
+  // room map from this round's beeps
+  const done = data.members.filter(m => m.round === p.round && m.heard);
+  if (done.length >= 3) {
+    const ids = done.map(m => m.id), heard = Object.fromEntries(done.map(m => [m.id, m.heard]));
+    const dists = Ranging.pairDistances(ids, heard);
+    const used = ids.filter(i => dists.some(d => d.a === i || d.b === i));
+    if (used.length >= 3) {
+      const lay = Ranging.layout(used, dists, 200);
+      const L = data.members.find(m => m.role === 'L'), R = data.members.find(m => m.role === 'R');
+      map = Ranging.orient(lay.pos, L && L.id, R && R.id); fit = lay.rms; mapRound = p.round;
+      $('#nMap').textContent = used.length + ' z ' + p.order.length; $('#fit').textContent = '±' + lay.rms.toFixed(2) + ' m';
+    }
+  }
+  // each drone: fix from the levels every listener reports for that drone's pitch
+  fixes = (p.drones || []).map((d, i) => {
+    const use = data.members.filter(m => m.id !== d.id && map[m.id] && m.levels && Number.isFinite(m.levels[d.id]) && m.lage < 3)
+      .map(m => ({ x: map[m.id].x, y: map[m.id].y, level: m.levels[d.id] }));
+    const fx = Fusion.localize(use);
+    const loud = use.slice().sort((a, b) => b.level - a.level)[0];
+    return { ...d, fx, loud, n: use.length, col: COL[i % COL.length] };
+  });
+}
+setInterval(poll, 1000); poll();
+
+const cv = $('#cv'), g = cv.getContext('2d');
+function draw() {
+  const dpr = devicePixelRatio || 1; cv.width = cv.clientWidth * dpr; cv.height = cv.clientHeight * dpr;
+  g.fillStyle = '#020905'; g.fillRect(0, 0, cv.width, cv.height);
+  const pts = Object.values(map), xs = pts.map(p => p.x), ys = pts.map(p => p.y);
+  const mx = pts.length ? (Math.min(...xs) + Math.max(...xs)) / 2 : 0, my = pts.length ? (Math.min(...ys) + Math.max(...ys)) / 2 : 0; // centre on the whole room
+  const ext = Math.max(3, ...pts.map(p => Math.max(Math.abs(p.x - mx), Math.abs(p.y - my)))) * 1.25;
+  const s = Math.min(cv.width, cv.height) / 2 / ext, cx = cv.width / 2, cy = cv.height / 2, P = (x, y) => [cx + (x - mx) * s, cy - (y - my) * s];
+  g.font = `${12 * dpr}px ui-monospace, Menlo, monospace`;
+  for (let r = 1; r <= ext * 1.5; r += ext > 8 ? 2 : 1) { g.strokeStyle = 'rgba(61,255,138,.13)'; g.beginPath(); g.arc(...P(0, 0), r * s, 0, 7); g.stroke(); }
+  g.fillStyle = 'rgba(183,245,207,.6)'; g.fillText('SCENA', cx - 20 * dpr, 20 * dpr);
+  if (!pts.length) { g.fillStyle = '#5f9a77'; g.font = `${20 * dpr}px ui-monospace, Menlo, monospace`; g.fillText('zeskanuj kod, stuknij Dołącz, potem Odliczanie', 30 * dpr, cy); }
+  const byId = Object.fromEntries(data.members.map(m => [m.id, m]));
+  for (const [id, p] of Object.entries(map)) {
+    const [x, y] = P(p.x, p.y), m = byId[id] || {}, dr = fixes.find(f => f.id === id);
+    const isAnchor = m.role === 'L' || m.role === 'R';
+    g.fillStyle = dr && revealed ? dr.col : isAnchor ? '#ffc24d' : '#3dff8a';
+    g.beginPath(); isAnchor ? g.rect(x - 7 * dpr, y - 7 * dpr, 14 * dpr, 14 * dpr) : g.arc(x, y, 6 * dpr, 0, 7); g.fill();
+    g.fillStyle = 'rgba(183,245,207,.75)'; g.fillText((m.name || id).slice(0, 12), x + 9 * dpr, y + 4 * dpr);
+    if (m.heading != null && data.stage != null && !isAnchor) { // which way the phone's top edge points; up = toward the stage
+      const d = ((m.heading - data.stage + 540) % 360) - 180, a = d * Math.PI / 180, L = 14 * dpr;
+      g.strokeStyle = Math.abs(d) < 15 ? 'rgba(61,255,138,.8)' : '#ffc24d'; g.lineWidth = 2 * dpr;
+      g.beginPath(); g.moveTo(x, y); g.lineTo(x + Math.sin(a) * L, y - Math.cos(a) * L); g.stroke(); g.lineWidth = 1;
+    }
+    if (dr && revealed) { g.strokeStyle = dr.col; g.lineWidth = 3 * dpr; g.beginPath(); g.arc(x, y, 16 * dpr, 0, 7); g.stroke(); g.lineWidth = 1; }
+  }
+  const t = performance.now() / 1000;
+  for (const f of fixes) {
+    if (!f.fx) continue;
+    const [x, y] = P(f.fx.x, f.fx.y);
+    g.strokeStyle = f.col + '77'; g.lineWidth = 1.5 * dpr; g.setLineDash([3 * dpr, 5 * dpr]); g.beginPath(); g.arc(x, y, Math.max(f.fx.err, 0.4) * s, 0, 7); g.stroke(); g.setLineDash([]); g.lineWidth = 1;
+    g.shadowColor = f.col; g.shadowBlur = 20 * dpr; g.fillStyle = f.col; g.beginPath(); g.arc(x, y, (8 + 3 * Math.sin(t * 6)) * dpr, 0, 7); g.fill(); g.shadowBlur = 0;
+    g.fillStyle = '#fff'; g.fillText(`DRON ${f.f0} Hz · telefony: ${f.n}`, x + 14 * dpr, y - 10 * dpr);
+    if (revealed && map[f.id]) {
+      const [tx, ty] = P(map[f.id].x, map[f.id].y), err = Math.hypot(map[f.id].x - f.fx.x, map[f.id].y - f.fx.y);
+      g.setLineDash([4 * dpr, 4 * dpr]); g.strokeStyle = f.col; g.beginPath(); g.moveTo(x, y); g.lineTo(tx, ty); g.stroke(); g.setLineDash([]);
+      g.fillText(`pomyłka ${err.toFixed(1)} m`, (x + tx) / 2 + 8 * dpr, (y + ty) / 2);
+    }
+  }
+  requestAnimationFrame(draw);
+}
+requestAnimationFrame(draw);
+</script>
+</html>

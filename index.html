@@ -5,13 +5,17 @@
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icon-192.png">
 <link rel="stylesheet" href="style.css">
+<style>h2 { font-size: 1em; letter-spacing: .08em; color: var(--dim); margin: 1.4em 0 .4em; }</style>
 <div class="wrap">
   <h1>WIELKI LESZY</h1>
-  <p class="muted">Wykrywanie dronów zwykłymi telefonami. Każdy telefon nasłuchuje grzebienia harmonicznych, który robi wirnik; radar łączy to, jak głośno słyszy go każdy telefon, w pozycję, prędkość i kurs.</p>
-  <div class="card"><a href="sensor.html"><button class="big">Czujnik</button></a><p class="muted">Na każdym iPhonie / iPadzie w sali (minimum 3, dobrze 5). Dodaj do ekranu początkowego, będzie pełny ekran.</p></div>
-  <div class="card"><a href="radar.html"><button class="big">Radar</button></a><p class="muted">Na laptopie albo dużym ekranie. <a href="radar.html?sim">Symulacja</a> bez telefonów.</p></div>
-  <div class="card"><a href="party.html"><button class="big">Dołącz do pokazu</button></a><p class="muted">Publiczność: twój telefon raz piśnie, żeby zmapować salę, potem słucha. Może zostać wybrany na drona.</p></div>
-  <div class="card"><a href="stage.html"><button class="big">Scena</button></a><p class="muted">Ekran prowadzącego do pokazu z publicznością: QR, odliczanie, drony, odsłonięcie.</p></div>
-  <div class="card"><a href="emitter.html"><button class="big">Udawany dron</button></a><p class="muted">Odtwarza syntetyczny dźwięk wirnika, do testów bez drona.</p></div>
+  <p class="muted">Telefony i mikrofony jako uszy na drony. Dwie części: najpierw węzły ustalają, gdzie są; potem słuchają.</p>
+  <h2>1. KALIBRACJA WĘZŁÓW</h2>
+  <div class="card"><a href="check.html?room=test"><button class="big">Baza</button></a><p class="muted">Na laptopie. Pokazuje QR do dołączenia, odpala pisk-rundy, rysuje mapę i mierzy odległości między węzłami.</p></div>
+  <div class="card"><a href="party.html?room=test"><button class="big">Węzeł (telefon)</button></a><p class="muted">Na każdym telefonie. Zwykle wchodzi się przez QR z bazy; ten przycisk jest na wypadek, gdyby QR nie zadziałał.</p></div>
+  <div class="card"><a href="pair.html?room=test"><button class="big">Węzeł z dwóch mikrofonów</button></a><p class="muted">Dwa nadajniki DJI na jednym odbiorniku, podpiętym do laptopa: różnica czasu daje kierunek.</p></div>
+  <h2>2. DETEKCJA</h2>
+  <div class="card"><a href="sensor.html"><button class="big">Czujnik</button></a><p class="muted">Na każdym telefonie: nasłuchuje grzebienia harmonicznych wirnika i melduje do radaru.</p></div>
+  <div class="card"><a href="radar.html"><button class="big">Radar</button></a><p class="muted">Na laptopie: pozycja, prędkość i kurs z tego, jak głośno słyszy dron każdy czujnik. <a href="radar.html?sim">Symulacja</a> bez telefonów.</p></div>
+  <div class="card"><a href="emitter.html"><button class="big">Udawany dron</button></a><p class="muted">Zapasowy telefon gra dźwięk wirnika, do testów bez drona.</p></div>
   <p class="muted">Detektor wzorowany na VolAnti (github.com/agamrossen/VolAnti) i Batear (github.com/batear-io/batear). Tylko wykrywanie.</p>
 </div>

@@ -100,6 +100,10 @@ function analyse() {
   const d = (+$('#d').value || 30) / 100, band = $('#band').value === 'wide' ? { fmin: 300, fmax: 8000 } : { fmin: 100, fmax: 2000 };
   const g = Bearing.gccPhat(bufL, bufR, ctx.sampleRate, { maxLag: Bearing.maxLagFor(d, ctx.sampleRate) + 20, ...band });
   lastG = g; lags.push(g.lag); if (lags.length > 12) lags.shift(); // last ~1 s
+  let same = 0; for (let i = 0; i < N; i += 7) if (bufL[i] === bufR[i]) same++; const mono = same > N / 7 * 0.99; // identical channels = the receiver sends one mix
+  const MONO_MSG = 'Oba kanały są identyczne: odbiornik gra MONO. RX > tryb kanałów > Stereo (TX1 lewy, TX2 prawy); sprawdź, czy oba nadajniki są włączone. Bez tego nie ma kierunku.';
+  if (mono && $('#err').textContent !== MONO_MSG) $('#err').textContent = MONO_MSG; else if (!mono && $('#err').textContent === MONO_MSG) $('#err').textContent = '';
+  if (mono) { $('#ang').textContent = 'MONO'; $('#ang').style.color = 'var(--hot)'; return; }
   if (zeroing) { if (g.conf > 2.5) zeroing.push(g.lag); if (zeroing.length >= 8) { offset = Bearing.median(zeroing); store('dp_pair_zero', offset); zeroing = null; $('#zero').textContent = 'Zero: klaśnij na wprost'; $('#cal').textContent = 'Zero ustawione: ' + offset.toFixed(1) + ' próbek = ' + (offset / ctx.sampleRate * 1000).toFixed(2) + ' ms różnicy zwłoki między nadajnikami, odejmowane.'; } }
   const lag = g.lag - offset, tau = lag / ctx.sampleRate, ang = Bearing.angleOf(tau, d);
   const med = Bearing.median(lags.map(x => x - offset)), sorted = lags.slice().sort((a, b) => a - b), spread = sorted.length > 3 ? sorted[sorted.length - 1 - (sorted.length >> 2)] - sorted[sorted.length >> 2] : 0;
