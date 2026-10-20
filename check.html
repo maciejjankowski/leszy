@@ -204,7 +204,12 @@ async function poll() {
     return '<tr' + (sus.has(k) ? ' class="sus" title="odstaje od reszty: pewnie zasłonięta ścieżka"' : '') + '><td>' + nm(x.a) + ' - ' + nm(x.b) + (sus.has(k) ? ' ?' : '') + '</td><td>' + x.d.toFixed(2) + '</td><td><input class="tape" data-k="' + k + '" inputmode="decimal" value="' + (t || '') + '"></td><td>' + (err == null ? '' : (err >= 0 ? '+' : '') + err.toFixed(2)) + '</td></tr>';
   }).join('') + '</table>' + (sus.size ? '<p class="muted" style="font-size:.75em">? = odległość odstaje od reszty sieci (pewnie ktoś zasłonił drogę dźwięku); waży mniej.</p>' : '') : '<p class="muted">Potrzeba co najmniej 2 telefonów, które się usłyszały.</p>';
   document.querySelectorAll('input.tape').forEach(i => i.onchange = () => { const v = parseFloat(i.value.replace(',', '.')); if (v > 0) tape[i.dataset.k] = v; else delete tape[i.dataset.k]; store('dp_tape', JSON.stringify(tape)); last = ''; });
-  target = lay ? lay.pos : null; names = nm;
+  // keep the last map while a round is still collecting results, and keep a phone that missed one round where it was;
+  // a phone leaves the map only when the hub has not seen it for 20 s
+  const liveIds = new Set(live.map(m => m.id));
+  if (lay) target = Object.fromEntries(Object.entries({ ...(target || {}), ...lay.pos }).filter(([i]) => liveIds.has(i)));
+  else if (target) { for (const i of Object.keys(target)) if (!liveIds.has(i)) delete target[i]; if (!Object.keys(target).length) target = null; }
+  names = nm;
   if (lay && walker && p.walker === walker && lay.pos[walker] && (!trail.length || trail[trail.length - 1].round !== p.round)) trail.push({ round: p.round, x: lay.pos[walker].x, y: lay.pos[walker].y, t: Date.now() });
   if (trail.length > 40) trail.shift();
   $('#walkInfo').textContent = walker ? 'Idzie: ' + nm(walker) + (trail.length > 1 ? ' · od startu ' + (Math.hypot(trail[trail.length - 1].x - trail[0].x, trail[trail.length - 1].y - trail[0].y) * 100).toFixed(0) + ' cm, ostatni krok ' + (Math.hypot(trail[trail.length - 1].x - trail[trail.length - 2].x, trail[trail.length - 1].y - trail[trail.length - 2].y) * 100).toFixed(0) + ' cm' : ' · czekam na kolejne rundy') + ' (przytrzymaj znowu, żeby odznaczyć)' : '';
