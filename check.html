@@ -32,7 +32,8 @@
       <p class="muted" id="gStep" style="margin:0"></p>
       <h2 id="gTitle" style="margin:.15em 0 .3em;font-size:1.2em"></h2>
       <p id="gText" style="margin:.2em 0 .6em"></p>
-      <div class="row"><button class="big" id="gBtn" hidden></button><span id="gStat"></span></div>
+      <div class="row"><button class="big" id="gBtn" hidden></button><button id="gSkip" hidden>Pomiń ten telefon</button><span id="gStat"></span></div>
+      <p class="row" id="gRefRow" hidden><label>Węzeł odniesienia <select id="gRef"></select></label></p>
     </div>
     <div id="qrBox"><div id="qr"></div><div id="count">0</div></div>
     <details id="settings"><summary>Ręcznie: Start, Ciągle, ustawienia</summary>
@@ -102,15 +103,45 @@ let loop = false, loopBusy = false;
 $('#loop').onclick = () => { loop = !loop; $('#loop').classList.toggle('on', loop); if (loop) $('#go').click(); };
 // Guided flow: one step, one physical instruction, one button. Derived from the same state the rest of the page uses.
 function guide(live, p) {
-  const liveIds = live.map(m => m.id), uncal = liveIds.filter(i => pileOff[i] === undefined), nmOf = i => (p.names && p.names[i]) || (live.find(m => m.id === i) || {}).name || i;
-  let step, title, text, btn = null, stat = '', act = null;
+  const liveIds = live.map(m => m.id), nmOf = i => (p.names && p.names[i]) || (live.find(m => m.id === i) || {}).name || i;
+  const ref = touchCal ? touchCal.ref : ($('#gRef').value && liveIds.includes($('#gRef').value) ? $('#gRef').value : liveIds[0]);
+  const uncal = liveIds.filter(i => i !== ref && !(touches[i] && touches[i].walker === ref) && pileOff[i] === undefined);
+  let step, title, text, btn = null, stat = '', act = null, skip = false;
+  $('#gRefRow').hidden = !(live.length >= 3 && uncal.length && !touchCal);
+  if (!touchCal) { const sel = $('#gRef'); const have = [...sel.options].map(o => o.value).join(','); if (have !== liveIds.join(',')) { sel.innerHTML = liveIds.map(i => '<option value="' + i + '">' + nmOf(i) + '</option>').join(''); if (liveIds.includes(ref)) sel.value = ref; } }
   if (live.length < 3) { step = 1; title = 'Dołącz telefony'; text = 'Każdy telefon: zeskanuj kod niżej, wpisz imię, stuknij Dołącz, potem Ton i podgłaśniaj, aż pasek będzie zielony. Potrzeba co najmniej 3.'; stat = 'dołączyło: ' + live.length; }
-  else if (pileCal) { step = 2; title = 'Kalibruję na stosie'; text = 'Nie ruszać telefonów. Trzy rundy, około 30 s.'; stat = 'runda ' + Math.min(pileCal.rounds.length + 1, pileCal.need) + ' z ' + pileCal.need; }
-  else if (uncal.length) { step = 2; title = 'Ułóż wszystkie telefony na jednym stosie'; text = 'Jeden stos, ekranem do góry, nic ich nie dotyka. Naciśnij Kalibruj: 3 rundy. Po kalibracji nie przeładowuj żadnego telefonu.'; btn = 'Kalibruj (3 rundy)'; act = () => $('#pileBtn').click(); stat = uncal.length < liveIds.length ? 'bez kalibracji: ' + uncal.map(nmOf).join(', ') : ''; }
+  else if (touchCal && touchCal.busy) { step = 2; title = 'Mierzę: ' + nmOf(touchCal.cur) + ' przy ' + nmOf(touchCal.ref); text = 'Nie ruszać. Dwie rundy, około 25 s.'; stat = 'runda ' + touchCal.busy + ' z 2'; }
+  else if (touchCal || uncal.length) {
+    if (!touchCal) touchCal = { ref, queue: uncal.slice(), cur: uncal[0], busy: 0 };
+    if (!liveIds.includes(touchCal.cur)) { touchCal.queue.shift(); touchCal.cur = touchCal.queue[0]; }
+    if (!touchCal.cur) { touchCal = null; last = ''; return guide(live, p); }
+    step = 2; title = 'Weź ' + nmOf(touchCal.cur) + ' i połóż go tuż przy ' + nmOf(touchCal.ref);
+    text = 'Krawędź przy krawędzi, oba ekranem do góry, reszta telefonów może leżeć gdziekolwiek. Naciśnij Zmierz. Potem odłóż ' + nmOf(touchCal.cur) + ' na miejsce i weź następny.';
+    btn = 'Zmierz (2 rundy)'; act = runTouch; skip = true; stat = 'zostało: ' + touchCal.queue.map(nmOf).join(', ') + (pileRes != null ? ' · ' + pileRes : '');
+  }
   else if (measure) { step = 3; title = 'Mierzę'; text = 'Nie ruszać telefonów. Pięć rund.'; stat = 'runda ' + Math.min(measure.rounds.length + 1, measure.need) + ' z ' + measure.need; }
-  else { step = 3; title = 'Rozstaw telefony i zmierz'; text = 'Ustaw telefony w zadanym rozstawie (np. 50 cm między sąsiadami). Taśmą zmierz 2-3 pary i wpisz je w tabeli "Odległości" po prawej. Naciśnij Mierz: 5 rund, wynik i zapis do dziennika. Potem zmień rozstaw i powtórz.'; btn = 'Mierz (5 rund)'; act = runMeasure; stat = lastResult || (pileRes != null ? 'stos gotowy: reszta ' + pileRes.toFixed(0) + ' cm' + (pileRes > 10 ? ' (dużo: powtórz Kalibruj)' : ' (dobrze)') : ''); }
+  else { step = 3; title = 'Rozstaw telefony i zmierz'; text = 'Ustaw telefony w zadanym rozstawie (np. 50 cm między sąsiadami). Taśmą zmierz 2-3 pary i wpisz je w tabeli "Odległości" po prawej. Naciśnij Mierz: 5 rund, wynik i zapis do dziennika. Potem zmień rozstaw i powtórz.'; btn = 'Mierz (5 rund)'; act = runMeasure; stat = lastResult || (pileRes != null ? String(pileRes) : ''); }
   $('#gStep').textContent = 'KROK ' + step + ' z 3'; $('#gTitle').textContent = title; $('#gText').textContent = text; $('#gStat').textContent = stat;
   const b = $('#gBtn'); b.hidden = !btn; if (btn) { b.textContent = btn; b.onclick = act; }
+  const sk = $('#gSkip'); sk.hidden = !skip; sk.onclick = () => { if (!touchCal) return; touchCal.queue.shift(); touchCal.cur = touchCal.queue[0]; if (!touchCal.cur) touchCal = null; last = ''; };
+}
+// one phone next to the reference: two rounds, raw two-way distance ref-phone, offset relative to the reference (which counts as zero)
+async function runTouch() {
+  const tc = touchCal; if (!tc || tc.busy) return;
+  const slot = +$('#slot').value, start = (await hub('data')).party.round;
+  for (let i = 1; i <= 2; i++) { tc.busy = i; last = ''; await hub('admin', { cmd: 'rollcall', band: $('#band').value, slot, frac: +$('#frac').value, gain: +$('#gain').value }); await new Promise(r => setTimeout(r, 4000 + 6 * slot * 1000 + 2500)); }
+  const d = await hub('data'), c = Ranging.soundSpeed(+$('#temp').value || 21), raws = [];
+  for (const r of [start + 1, start + 2]) {
+    const heard = {}; for (const m of d.members) { const h = m.round === r ? m.heard : (m.prev || []).find(x => x && x.round === r); if (h) heard[m.id] = h.heard || h; }
+    if (heard[tc.ref] && heard[tc.cur]) for (const x of Ranging.pairDistances([tc.ref, tc.cur], heard, { c })) raws.push(x.raw);
+  }
+  tc.busy = 0;
+  if (!raws.length) { toast('Nie usłyszały się: sprawdź dźwięk na ' + (p => p)(tc.cur) + ', spróbuj jeszcze raz', true); last = ''; return; }
+  const raw = raws.length > 1 ? (raws[0] + raws[1]) / 2 : raws[0];
+  touches[tc.cur] = { walker: tc.ref, raw, round: start + 2, t: Date.now() }; delete pileOff[tc.cur]; delete pileOff[tc.ref]; store('dp_touch', JSON.stringify(touches)); store('dp_pileoff', JSON.stringify(pileOff));
+  pileRes = 'ostatni dotyk: ' + (raw * 100).toFixed(0) + ' cm surowo' + (raws.length > 1 ? ', rozrzut ' + (Math.abs(raws[0] - raws[1]) * 100).toFixed(0) + ' cm' : '');
+  tc.queue.shift(); tc.cur = tc.queue[0]; if (!tc.cur) { touchCal = null; pileRes = 'kalibracja przez dotyk gotowa'; }
+  last = '';
 }
 async function runMeasure() {
   measure = { rounds: [], need: 5 }; lastResult = ''; guide([], { names: {} }); // placeholder until the next poll redraws
@@ -132,11 +163,11 @@ function maybeNextRound(p, done, now) { // continuous mode: next round once this
 const store = (k, v) => { try { if (v === undefined) return localStorage.getItem(k); localStorage.setItem(k, v); } catch (e) {} };
 let lastSnap = null; // what "Zapisz pomiar" sends: the latest fit, for the field log
 let tape = {}; try { tape = JSON.parse(store('dp_tape') || '{}'); } catch (e) {}
-$('#temp').value = store('dp_temp') || 21; $('#band').value = store('dp_band') || 'high';
+$('#temp').value = store('dp_temp') || 21; $('#band').value = store('dp_band') || 'mid';
 $('#temp').onchange = () => { store('dp_temp', $('#temp').value); last = ''; showSpeed(); };
 $('#band').onchange = () => store('dp_band', $('#band').value);
 $('#slot').value = store('dp_slot') || '0.5'; $('#slot').onchange = () => store('dp_slot', $('#slot').value);
-$('#frac').value = store('dp_frac') || '0.5'; $('#frac').onchange = () => store('dp_frac', $('#frac').value);
+$('#frac').value = store('dp_frac') || '0.3'; $('#frac').onchange = () => store('dp_frac', $('#frac').value);
 $('#gain').value = store('dp_gain') || '0.6'; $('#gain').onchange = () => store('dp_gain', $('#gain').value);
 const showSpeed = () => { $('#cspeed').textContent = 'dźwięk ' + Ranging.soundSpeed(+$('#temp').value || 21).toFixed(1) + ' m/s'; }; showSpeed();
 const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -190,7 +221,7 @@ async function poll() {
   // reference, offset(device) = -raw. Only pair sums matter to the map, so the walker's own gap shifts every device alike.
   const touchOff = {}; for (const [id, t] of Object.entries(touches)) if (t.walker !== id) touchOff[id] = -t.raw;
   const fit = Ranging.fitOffsets(rawD, tapeOk); // tape-measured pairs -> per-phone speaker-mic offset
-  for (const m of d.members) { if (m.joined && joinedAt[m.id] && m.joined !== joinedAt[m.id] && pileOff[m.id] !== undefined) { delete pileOff[m.id]; store('dp_pileoff', JSON.stringify(pileOff)); toast(nm(m.id) + ' przeładował się: jego kalibracja ze stosu wygasła', true); } if (m.joined) joinedAt[m.id] = m.joined; }
+  for (const m of d.members) { if (m.joined && joinedAt[m.id] && m.joined !== joinedAt[m.id]) { if (pileOff[m.id] !== undefined || touches[m.id]) { delete pileOff[m.id]; delete touches[m.id]; store('dp_pileoff', JSON.stringify(pileOff)); store('dp_touch', JSON.stringify(touches)); toast(nm(m.id) + ' przeładował się: jego kalibracja wygasła', true); } } if (m.joined) joinedAt[m.id] = m.joined; }
   const offset = Object.fromEntries(dIds.map(i => [i, pileOff[i] ?? touchOff[i] ?? (fit.k[i] ?? fit.shared)])); // pile beats touch beats tape beats shared
   if (pileCal && !p.walker && done.length >= 3 && !pileCal.rounds.some(r => r.round === p.round) && done.length === p.order.length) {
     pileCal.rounds.push({ round: p.round, order: p.order, slot: p.slot, heard: Object.fromEntries(done.map(m => [m.id, m.heard])) });
@@ -198,7 +229,7 @@ async function poll() {
       const ids2 = p.order, ds = Ranging.medianDistances(ids2, pileCal.rounds, { c }), k = Object.fromEntries(ids2.map(i => [i, 0]));
       for (let it = 0; it < 300; it++) for (const i of ids2) { let num = 0, den = 0; for (const x of ds) if (x.a === i || x.b === i) { num += (x.raw - 0.05) - k[x.a === i ? x.b : x.a]; den++; } if (den) k[i] = num / den; }
       let res = 0; for (const x of ds) res += (x.raw - 0.05 - k[x.a] - k[x.b]) ** 2;
-      pileOff = Object.fromEntries(ids2.map(i => [i, -k[i]])); store('dp_pileoff', JSON.stringify(pileOff)); pileCal = null; last = ''; pileRes = Math.sqrt(res / ds.length) * 100;
+      pileOff = Object.fromEntries(ids2.map(i => [i, -k[i]])); store('dp_pileoff', JSON.stringify(pileOff)); pileCal = null; last = ''; pileRes = 'stos: reszta ' + (Math.sqrt(res / ds.length) * 100).toFixed(0) + ' cm';
       toast('Stos gotowy: ' + ids2.map(i => nm(i) + ' ' + (-k[i] * 100).toFixed(0) + ' cm').join(', ') + ' · reszta ' + (Math.sqrt(res / ds.length) * 100).toFixed(0) + ' cm', Math.sqrt(res / ds.length) > 0.3);
     }
   }
@@ -300,6 +331,7 @@ let walker = null, trail = [], pressTimer = null, pressed = false, frozen = null
 const joinedAt = {}; // when each member last joined; a new join = reloaded page = stale calibration
 let pileCal = null; // { startRound, rounds: [] } while a pile calibration runs
 let pileRes = null, measure = null, lastResult = ''; // guide state: last pile residual (cm), a 5-round measurement in progress, its result line
+let touchCal = null; // { ref, queue: [ids], cur, busy } guided touch calibration: each phone laid next to the reference, two rounds, its offset relative to the reference
 let pileOff = {}; try { pileOff = JSON.parse(store('dp_pileoff') || '{}'); } catch (e) {} // id -> offset (m) to add
 let touches = {}; try { touches = JSON.parse(store('dp_touch') || '{}'); } catch (e) {} // id -> { walker, raw, lvl: {wd, dw, ww, dd}, round }
 const hitDot = e => { const dpr = devicePixelRatio || 1, px = e.offsetX * dpr, py = e.offsetY * dpr; const h = Object.entries(dotPos).map(([id, p]) => [id, Math.hypot(p.x - px, p.y - py)]).filter(x => x[1] < 22 * dpr).sort((a, b) => a[1] - b[1])[0]; return h ? h[0] : null; };

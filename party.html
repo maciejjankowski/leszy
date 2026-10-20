@@ -42,6 +42,7 @@
     </details>
   </div>
   <div id="runBox" hidden>
+    <p id="meName" style="text-align:center;font-size:1.6em;font-weight:700;margin:.2em 0"></p>
     <div id="big">Czekam na odliczanie...</div>
     <p id="sub" class="muted"></p>
     <p id="dir" class="muted" style="text-align:center;font-size:1.2em"></p>
@@ -137,7 +138,7 @@ async function start() {
     await api('join', { id, name: name || id, role });
   } catch (e) { prepared = null; $('#err').textContent = 'Nie udało się uruchomić: ' + e.message + (isSecureContext ? '' : ' (wymaga https)') + (store('dp_joined') === '1' ? ' · stuknij Dołącz' : ''); return; } // an auto-rejoin that iOS blocks (no tap yet) just asks for a tap
   try { lock = await navigator.wakeLock.request('screen'); } catch (e) {}
-  $('#joinBox').hidden = true; $('#runBox').hidden = false;
+  $('#joinBox').hidden = true; $('#runBox').hidden = false; $('#meName').textContent = name || id;
   say(role ? 'SCENA ' + (role === 'L' ? 'LEWA' : 'PRAWA') : (LOCATE ? 'Jesteś w grze. Czekam na start...' : 'Jesteś w grze. Czekam na odliczanie...'), 'ok', name);
   setInterval(poll, 1000); setInterval(listen, 250); setInterval(coach, 500);
 }
