@@ -4,6 +4,8 @@
 
 ## Links
 
+Native laptop program (Zoom U-44, DJI receivers, raw mic input, calibration in an editable `calib.yaml`): separate repo `leszy-native`, local `/Users/mj/code/leszy-native`, https://github.com/maciejjankowski/leszy-native (private). Its fixes show on `native.html`.
+
 Live (PIN-gated beta; the base screen's QR carries the PIN, so guests type nothing):
 
 | What | Live | In this repo |
