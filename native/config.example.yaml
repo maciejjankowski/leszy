@@ -1,0 +1,19 @@
+# Copy to config.yaml and measure the mic positions with a tape (metres, any origin, x right, y forward).
+# name: a piece of the device name from `python3 leszy.py devices`. channels: 1-based inputs on that device.
+# sync: true = one clock for all its channels (Zoom U44, one DJI receiver in Stereo): time differences inside it are used.
+# Mics on different devices are compared by loudness only.
+height: 1.0          # expected drone height above the mics (m); with mics on the floor, distances are 3-D
+room: {xmin: -1, xmax: 5, ymin: -1, ymax: 5}
+devices:
+  - name: "U-44"
+    label: U44
+    channels: [1, 2, 3, 4]
+    positions: [[0, 0], [3, 0], [3, 3], [0, 3]]
+    sync: true
+  - name: "Wireless Mic Rx"
+    label: DJI
+    channels: [1, 2]
+    positions: [[1.5, -0.5], [1.5, 3.5]]
+    sync: true
+post_url: "http://localhost:18080/drone-ear/party.php?a=extfix&room=test"
+calib_points: ["1.5,1.5", "0.5,0.5", "2.5,0.5", "2.5,2.5", "0.5,2.5"]

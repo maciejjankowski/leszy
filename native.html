@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="pl"><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Wielki Leszy</title>
+<link rel="stylesheet" href="style.css">
+<style>
+  #map { width: 100%; height: 70vh; display: block; background: #fff; border: 1px solid var(--line); border-radius: 8px; }
+  #st { font-size: 1.3em; font-weight: 700; margin: .4em 0; }
+  #st.on { color: var(--hot); }
+</style>
+<div class="wrap" style="max-width:900px">
+  <h1 data-ssot="native.title"></h1>
+  <p class="muted" data-ssot="native.lead"></p>
+  <p id="st"></p>
+  <canvas id="map"></canvas>
+</div>
+<script src="ssot.js"></script>
+<script>
+const $ = s => document.querySelector(s), ROOM = new URLSearchParams(location.search).get('room') || 'test';
+let trail = [], last = null;
+async function poll() {
+  try { const j = await (await fetch('party.php?a=extfix&room=' + ROOM, { cache: 'no-store' })).json(); last = j; } catch (e) { last = null; }
+  draw();
+}
+function draw() {
+  const st = $('#st'), r = last && last.last;
+  st.className = '';
+  if (!r) st.textContent = SSOT.t('native.waiting');
+  else if (last.age > 5) st.textContent = SSOT.t('native.stale', { s: Math.round(last.age) });
+  else if (r.on && r.fix) { st.className = 'on'; st.textContent = SSOT.t('native.drone', { f0: r.f0 ? Math.round(r.f0) + ' Hz' : '', x: r.fix.x.toFixed(2), y: r.fix.y.toFixed(2), err: r.fix.err.toFixed(2), v: r.fix.speed.toFixed(1) }); }
+  else if (r.on) { st.className = 'on'; st.textContent = SSOT.t('native.drone_nofix', { f0: r.f0 ? Math.round(r.f0) + ' Hz' : '' }); }
+  else if (r.hearing && r.hearing.length) st.textContent = SSOT.t('native.hear', { n: r.hearing.length });
+  else st.textContent = SSOT.t('native.quiet', { n: Object.keys(r.mic_pos || {}).length });
+  if (r && r.fix && last.age < 5) { const p = trail[trail.length - 1]; if (!p || p.x !== r.fix.x || p.y !== r.fix.y) trail.push({ x: r.fix.x, y: r.fix.y }); if (trail.length > 120) trail.shift(); }
+  const c = $('#map'), g = c.getContext('2d'), dpr = devicePixelRatio || 1, W = c.width = c.clientWidth * dpr, H = c.height = c.clientHeight * dpr;
+  g.clearRect(0, 0, W, H);
+  const mics = r && r.mic_pos ? Object.entries(r.mic_pos) : [];
+  if (!mics.length) return;
+  const pts = mics.map(m => m[1]).concat(trail.map(p => [p.x, p.y])), xs = pts.map(p => p[0]), ys = pts.map(p => p[1]);
+  const x0 = Math.min(...xs) - 1, x1 = Math.max(...xs) + 1, y0 = Math.min(...ys) - 1, y1 = Math.max(...ys) + 1, s = Math.min(W / (x1 - x0), H / (y1 - y0));
+  const P = (x, y) => [(x - x0) * s + (W - (x1 - x0) * s) / 2, H - ((y - y0) * s + (H - (y1 - y0) * s) / 2)];
+  g.strokeStyle = 'rgba(0,0,0,.08)'; g.font = (11 * dpr) + 'px -apple-system, sans-serif'; g.fillStyle = '#888';
+  for (let x = Math.ceil(x0); x <= x1; x++) { const [a] = P(x, 0); g.beginPath(); g.moveTo(a, 0); g.lineTo(a, H); g.stroke(); g.fillText(x, a + 2, H - 4); }
+  for (let y = Math.ceil(y0); y <= y1; y++) { const [, b] = P(0, y); g.beginPath(); g.moveTo(0, b); g.lineTo(W, b); g.stroke(); g.fillText(y, 2, b - 2); }
+  for (const [id, p] of mics) {
+    const [x, y] = P(p[0], p[1]), heard = r.hearing && r.hearing.includes(id);
+    if (heard) { g.strokeStyle = '#c62828'; g.lineWidth = 3 * dpr; g.beginPath(); g.arc(x, y, 12 * dpr, 0, 7); g.stroke(); g.lineWidth = 1; }
+    g.fillStyle = '#1f7a3f'; g.beginPath(); g.arc(x, y, 7 * dpr, 0, 7); g.fill();
+    const m = r.mics && r.mics[id]; g.fillStyle = '#111'; g.font = (12 * dpr) + 'px -apple-system, sans-serif'; g.fillText(id + (m ? '  +' + m.snr.toFixed(0) + ' dB' : ''), x + 10 * dpr, y + 4 * dpr);
+  }
+  if (trail.length > 1) { g.strokeStyle = 'rgba(198,40,40,.35)'; g.lineWidth = 2 * dpr; g.beginPath(); trail.forEach((p, i) => { const [x, y] = P(p.x, p.y); i ? g.lineTo(x, y) : g.moveTo(x, y); }); g.stroke(); g.lineWidth = 1; }
+  if (r.on && r.fix && last.age < 5) { const [x, y] = P(r.fix.x, r.fix.y); g.strokeStyle = 'rgba(198,40,40,.5)'; g.beginPath(); g.arc(x, y, Math.max(6 * dpr, r.fix.err * s), 0, 7); g.stroke(); g.fillStyle = '#c62828'; g.beginPath(); g.arc(x, y, 9 * dpr, 0, 7); g.fill(); }
+}
+SSOT.ready.then(() => { poll(); setInterval(poll, 250); addEventListener('resize', draw); });
+</script>

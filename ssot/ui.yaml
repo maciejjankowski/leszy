@@ -272,3 +272,14 @@ party:
     score: "siła grzebienia, 30 s (kreska = próg alarmu)"
     spectrum: "widmo 0-3 kHz"
     best: " · najlepszy ton {f0} Hz, {db} dB"
+
+native:
+  title: "WIELKI LESZY · MIKROFONY"
+  lead: "Mapa z programu na laptopie (native/leszy.py): stałe mikrofony, czas przelotu i głośność. Strona tylko pokazuje."
+  waiting: "Czekam na program na laptopie. Uruchom: python3 leszy.py run -c config.yaml"
+  stale: "Program milczy od {s} s. Sprawdź, czy dalej działa."
+  quiet: "Cisza · mikrofonów: {n}"
+  hear: "Słyszę ({n} mikr.), jeszcze bez alarmu"
+  drone: "DRON {f0} · ({x}, {y}) m ±{err} m · {v} m/s"
+  drone_nofix: "DRON {f0} · bez namiaru"
+  axis: "metry"

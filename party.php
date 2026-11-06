@@ -47,6 +47,16 @@ function appVersion() { // content hash, not mtime: a deploy that touches only o
 }
 if ($a === 'time') out(['t' => $now * 1000]);
 
+if ($a === 'extfix') { // the native program (native/leszy.py) POSTs every analysis step it reports; GET returns the latest
+  if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    $b = body(); $b['recv'] = $now;
+    $db->prepare("INSERT INTO kv (k, v) VALUES ('extfix', ?) ON CONFLICT(k) DO UPDATE SET v = excluded.v")->execute([json_encode($b)]);
+    out(['ok' => 1]);
+  }
+  $v = $db->query("SELECT v FROM kv WHERE k='extfix'")->fetchColumn();
+  $j = $v ? json_decode($v, true) : null;
+  out(['t' => $now, 'age' => $j ? round($now - $j['recv'], 1) : null, 'last' => $j]);
+}
 if ($a === 'log') { // field log: one JSON line per saved measurement (tape, pile result, bearing, note), never deleted by reset
   $b = body(); $b['t'] = date('c'); $b['room'] = $room;
   file_put_contents($dir . '/log' . ($room !== '' ? '-' . $room : '') . '.jsonl', json_encode($b, JSON_UNESCAPED_UNICODE) . "\n", FILE_APPEND | LOCK_EX);

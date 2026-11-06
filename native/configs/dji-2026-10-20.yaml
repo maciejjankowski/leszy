@@ -1,0 +1,10 @@
+# Replay of the 20.10 recording: one DJI receiver, two mics 2.5 m apart on a line.
+height: 1.0
+room: {xmin: -1, xmax: 3.5, ymin: -2, ymax: 2}
+devices:
+  - name: "Wireless Mic Rx"
+    label: DJI
+    channels: [1, 2]
+    positions: [[0, 0], [2.5, 0]]
+    sync: true
+post_url: ""
