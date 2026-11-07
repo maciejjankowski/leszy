@@ -14,7 +14,9 @@ EXC=(--exclude 'data/' --exclude 'pin.config.php' --exclude '.DS_Store' --exclud
 rsync -a "${EXC[@]}" --exclude 'README.md' "$SRC/app/" "$DST/"
 mkdir -p "$DST/tests" "$DST/extras"
 rsync -a "${EXC[@]}" "$SRC/tests/" "$DST/tests/"
-rsync -a "${EXC[@]}" "$SRC/extras/" "$DST/extras/"
+rsync -a "${EXC[@]}" --exclude 'presentations/' "$SRC/extras/" "$DST/extras/"
+mkdir -p "$DST/presentations"
+rsync -a "${EXC[@]}" "$SRC/extras/presentations/" "$DST/presentations/"   # the deck lives at presentations/ in this repo
 
 # README: strip leading YAML frontmatter and the internal [[wikilink]] line
 awk 'NR==1 && $0=="---"{fm=1; next} fm && $0=="---"{fm=0; next} fm{next} /^\[\[.*\]\][[:space:]]*$/{next} {print}' \
